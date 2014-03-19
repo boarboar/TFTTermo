@@ -26,10 +26,6 @@
 #define BUTTON_1  P2_1
 #define BUTTON_2  P1_1
 
-//#define RED_LED P1_0;
-//#define GREEN_LED  P4_7;
-
-
 /*
 // 5523 PINOUT
 // SW I2C
@@ -149,23 +145,21 @@ const char *lnames[WS_NUILEV] = {"main", "hist", "chart", "chr60", "stat", "set"
 #define WS_CHAR_UP 128
 #define WS_CHAR_DN 129
 
-//unsigned long mstart;
+const int chart_width=240;
+const int chart_height=220;
+const int chart_top=19;
 
 #define WS_BUT_NONE  0x00
 #define WS_BUT_PRES  0x01
-//#define WS_BUT_DPRES  0x02
-
-//#define WS_BUT_P_T  50
-//#define WS_BUT_LP_T  2000
 
 unsigned long mbloff;
 unsigned long mdisp;
 unsigned long mui;
 uint8_t ledon=0;
 uint8_t bst1=WS_BUT_NONE, bst2=WS_BUT_NONE;
-uint8_t bt1cnt=0;
-//unsigned long bstp1=0;
+uint8_t bt1cnt=0, bt2cnt=0;
 uint8_t uilev=0;
+uint8_t editmode=0;
 const int WS_BL_TO=20000;
 
 long dif=0;
@@ -245,7 +239,7 @@ void loop()
       ledon=0;
    }
       
-   if(uilev>0 && mdisp>mbloff) {  // dimmer
+   if(uilev>0 && mdisp>mbloff && !editmode) {  // dimmer
      uilev=0;
      updateScreen(true);
    }
@@ -253,21 +247,38 @@ void loop()
      if(bt1cnt<100) bt1cnt++;
    }
    else if(bt1cnt) {
+     sprintf(buf, "%d  ", (int)bt1cnt);
+     Tft.drawString(buf,200,211,2, WHITE, BLACK, true);
      if(bt1cnt<2) {dispStat("DEBOUNCE");} // debounce
      else if(bt1cnt<20) { // short click       
-       mbloff=millis()+WS_BL_TO;
-       uilev=(uilev+1)%WS_NUILEV;
-       updateScreen(true);
        dispStat("SHORTCLK");
+       processShortClick();
      } else { // long click  
          dispStat("LONGCLK.");
+         processLongClick();
      }
      bt1cnt=0;
    }
    
+   if(bst2&WS_BUT_PRES) {
+     if(bt2cnt<100) bt2cnt++;
+   }
+   else if(bt2cnt) {
+     sprintf(buf, "%d  ", (int)bt2cnt);
+     Tft.drawString(buf,200,211,2, WHITE, BLACK, true);
+     if(bt2cnt<2) {dispStat("DEBOUNC2");} // debounce
+     else if(bt2cnt<20) { // short click       
+       dispStat("SHORTCL2");
+       processShortRightClick();
+     } else { // long click  
+       dispStat("LONGCLK2");
+     }
+     bt2cnt=0;
+   }
+   
    if(ms-mdisp > 500 || mdisp>ms) { // 0.5 sec screen update
      mdisp=ms;   
-     if(!(alarms&WS_ALR_TO) && millis()-rf_millis>WS_SENS_TIMEOUT) {
+     if(!(alarms&WS_ALR_TO) && millis()-rf_millis>WS_SENS_TIMEOUT) { //!!!
        alarms |= WS_ALR_TO;
        alarm_val=(millis()-rf_millis)/60000;
        alarm_cnt[WS_ALR_TO_IDX]++;
@@ -276,8 +287,44 @@ void loop()
      updateScreenTime(false);       
    }  
  } // UI cycle
- 
 }
+
+void processShortClick() {
+  if(!editmode) { 
+    mbloff=millis()+WS_BL_TO;
+    uilev=(uilev+1)%WS_NUILEV;
+    updateScreen(true);
+  }
+  else {
+    if(uilev==WS_UI_SET) {
+      dispStat("EDIT MOV");
+      Tft.drawRectangle(FONT_SPACE*4*(editmode<3?editmode-1:editmode), 40, FONT_SPACE*4, FONT_Y*4, BLACK);  
+      editmode++;
+      if(editmode>4) editmode=1;
+      Tft.drawRectangle(FONT_SPACE*4*(editmode<3?editmode-1:editmode), 40, FONT_SPACE*4, FONT_Y*4, BLUE);
+    }
+  }
+}
+
+void processLongClick() {
+  if(uilev==WS_UI_SET) {
+    if(!editmode) {
+      dispStat("EDIT  ON");
+      editmode=1;
+      Tft.drawRectangle(0, 40, FONT_SPACE*4, FONT_Y*4, BLUE);
+    } else {
+      dispStat("EDIT OFF");
+      editmode=0;      
+      Tft.drawRectangle(FONT_SPACE*4*(editmode<3?editmode-1:editmode), 40, FONT_SPACE*4, FONT_Y*4, BLACK);  
+    }
+  }
+}
+
+void processShortRightClick() {
+  if(!editmode) return;
+  if(uilev!=WS_UI_SET) return;
+  timeUp(editmode-1);
+}       
 
 void updateScreen(bool refresh) {
   if(refresh) {
@@ -338,7 +385,10 @@ void updateScreenTime(bool reset) {
     printDate(reset);   
     dispTimeout(millis()-last_millis_temp, reset, 0, 160, 2);
   } else if(uilev==WS_UI_SET) {
-    printDate(reset);   
+      if(editmode) {
+        ;
+      }
+      else printDate(reset);   
   }
 }
 
@@ -404,10 +454,15 @@ void printDate(bool reset){
   int i;
   for(i=0; i<2; i++) tmp[i]=bcdToDec(Wire.read()); //s/m
   tmp[2]=bcdToDec(Wire.read() & 0b111111); //24 hour time  
-  disp_3(tmp, p_time, 0, 40, 4, YELLOW, ':', true);
+  //disp_3(tmp, p_time, 0, 40, 4, YELLOW, ':', true);
+  disp_dig(reset, 2, 2, tmp, p_time, 0, 40, 4, YELLOW, ':');
   Wire.read(); // 0-6 -> sunday - Saturday  
   for(i=0; i<3; i++) tmp[i]=bcdToDec(Wire.read()); //d/m/y  
   disp_3(tmp, p_date, 0, 0, 2, RED, '/', false);
+}
+
+void timeUp(int dig) {
+  
 }
 
 void disp_3(byte *data, byte *p_data, int x, int y, int sz, int color, char delim, bool ss) {
@@ -423,6 +478,24 @@ void disp_3(byte *data, byte *p_data, int x, int y, int sz, int color, char deli
     }
     posX+=FONT_SPACE*sz*(i?3:2);
   }
+}
+
+void disp_dig(byte redraw, byte ngrp, byte nsym, byte *data, byte *p_data, int x, int y, int sz, int color, char delim) {
+  char sbuf[8];
+  int posX=x;
+  for(byte igrp=0; igrp<ngrp; igrp++) {  
+    if(igrp) {
+      if(redraw) Tft.drawChar(delim, posX, y, sz, color, BLACK, true);  
+      posX+=FONT_SPACE*sz;
+    }
+    for(byte isym=0; isym<nsym; isym++) {
+       byte div10=(isym=0?10:1);
+       if(redraw || (data[igrp]/div10)%10!=(p_data[igrp]/div10)%10)
+         Tft.drawChar('0'+(data[igrp]/div10)%10,posX,y,sz, color, BLACK, true);  
+       posX+=FONT_SPACE*sz;
+    }
+    p_data[igrp]=data[igrp];
+  }    
 }
 
 void dispErr() {
@@ -456,7 +529,8 @@ uint8_t addHistAcc(struct wt_msg *pmsg) {
   last_tmp=pmsg->temp; 
   acc.cnt++;
   acc.temp+=pmsg->temp;
-  mins=(millis()-acc_prev_time)/60000L; // TEMPORARILY (NEED TO HANDLE WRAPAROUND)!!!!
+  //mins=(millis()-acc_prev_time)/60000L; // TEMPORARILY (NEED TO HANDLE WRAPAROUND)!!!!
+  mins=interval(acc_prev_time)/60000L;
   last_millis_temp=millis();
   if(mins>=WS_ACC_TIME) { 
     addHist(1, mins, acc.temp/acc.cnt);
@@ -501,13 +575,14 @@ void printHist(uint8_t sid) {
     return;
   }
   uint8_t prev=lst;
-  uint8_t mbefore=(millis()-acc_prev_time)/60000L; // TEMPORARILY (NEED TO HANDLE WRAPAROUND)!!!!;
+  //int mbefore=(millis()-acc_prev_time)/60000L; // TEMPORARILY (NEED TO HANDLE WRAPAROUND)!!!!;
+  int mbefore=interval(acc_prev_time)/60000L;
   uint8_t vpos=0;
   char buf[16];
   
   do {
     Tft.drawString(printTemp(buf, hist[prev].temp, 0),0,vpos, 1, GREEN, BLACK, false);
-    sprintf(buf, "-%d min", (int)mbefore); 
+    sprintf(buf, "-%d min", mbefore); 
     Tft.drawString(buf,100, vpos, 1, GREEN, BLACK, false);
     mbefore+=hist[prev].mins;
     vpos+=FONT_SPACE+2;
@@ -639,7 +714,7 @@ void chartHist(uint8_t sid) { // this is not a correct time-chart...just a seque
   
   int16_t mint, maxt;
   uint16_t mbefore;
-  char buf[16];
+  char buf[32];
   int cnt=0;
 
   uint8_t lst=hist_ptr==0?WS_HIST_SZ-1 : hist_ptr-1;   
@@ -649,7 +724,6 @@ void chartHist(uint8_t sid) { // this is not a correct time-chart...just a seque
   }
   maxt=hist[lst].temp;
   mint=hist[lst].temp;
-  //mbefore=(millis()-acc_prev_time)/60000L; // TEMPORARILY (NEED TO HANDLE WRAPAROUND)!!!!;
   mbefore=interval(acc_prev_time)/60000L;
   
   uint8_t prev=lst;  
@@ -679,9 +753,6 @@ void chartHist(uint8_t sid) { // this is not a correct time-chart...just a seque
   
   int16_t tdiff=maxt-mint;
   
-  const int chart_width=240;
-  const int chart_height=220;
-  const int chart_top=19;
   const int chart_xstep_denom=15;
   const int chart_xstep_nom=2;
   
@@ -697,8 +768,7 @@ void chartHist(uint8_t sid) { // this is not a correct time-chart...just a seque
   
   Tft.drawVerticalLine(mbefore*chart_xstep_nom/chart_xstep_denom, chart_top, chart_height,BLUE); // now
   
-  //int hpos=cnt*chart_xstep;
-  mbefore-=interval(acc_prev_time);
+  mbefore-=interval(acc_prev_time)/60000L; //!!!!!!!!!!!!!!
   cnt=0;
   y0=(int32_t)(maxt-hist[prev].temp)*chart_height/tdiff;
   prev=lst; 
@@ -708,11 +778,17 @@ void chartHist(uint8_t sid) { // this is not a correct time-chart...just a seque
     if(cnt) // !!!!!!!
       Tft.drawLine(hpos,chart_top+y0,hpos-chart_xstep,chart_top+y,GREEN);
       */
-    if(cnt)  
-      Tft.drawLine(mbefore*chart_xstep_nom/chart_xstep_denom,chart_top+y0,(mbefore-hist[prev].mins)*chart_xstep_nom/chart_xstep_denom,chart_top+y,GREEN);
+    if(cnt)  {
+      int x1=(mbefore-hist[prev].mins)*chart_xstep_nom/chart_xstep_denom;
+      int x0=mbefore*chart_xstep_nom/chart_xstep_denom;
+      if(cnt<3) {
+        sprintf(buf, "%d -> %d | ", (int)(mbefore-hist[prev].mins), (int)mbefore ); Tft.drawString(buf, 10, FONT_Y*2*cnt, 2, RED, BLACK, false);
+        sprintf(buf, "%d -> %d", x1, x0); Tft.drawString(buf, 120, FONT_Y*2*cnt, 2, RED, BLACK, false);
+      }
+      Tft.drawLine(x1,chart_top+y,x0,chart_top+y0,GREEN);
+    }
     y0=y;
     prev=prev==0?WS_HIST_SZ-1 : prev-1; 
-    //hpos-=chart_xstep;
     mbefore-=hist[prev].mins;
     cnt++;
   } while(prev!=lst && hist[prev].temp!=HIST_NODATA);   
@@ -721,12 +797,71 @@ void chartHist(uint8_t sid) { // this is not a correct time-chart...just a seque
 
 void chartHist60(uint8_t sid) {
   
-  int16_t mint, maxt; 
+  const int DUR_24=24;
+  const int DUR_MIN=60;
+  int16_t alldur=DUR_24*DUR_MIN;
+  
+  int16_t mint, maxt;
+  uint16_t mbefore;
+  char buf[32];
+  int cnt=0;
  
   uint8_t lst=hist_ptr==0?WS_HIST_SZ-1 : hist_ptr-1;   
   if(hist[lst].temp==HIST_NODATA) {
     Tft.drawString("NO DATA", 40,100, 6, RED, BLACK, false);
     return;
+  }
+    
+  maxt=hist[lst].temp;
+  mint=hist[lst].temp;
+  mbefore=interval(acc_prev_time)/60000L;
+  
+  uint8_t prev=lst;  
+  do {
+    if(hist[prev].temp>maxt) maxt=hist[prev].temp;
+    if(hist[prev].temp<mint) mint=hist[prev].temp;
+    mbefore+=hist[prev].mins;
+    prev=prev==0?WS_HIST_SZ-1 : prev-1; 
+    cnt++;
+  } while(prev!=lst && hist[prev].temp!=HIST_NODATA);
+  
+  Tft.drawString(printTemp(buf, mint, 0), 0, 0, 2, GREEN, BLACK, false);
+  Tft.drawString(printTemp(buf, maxt, 0), 80, 0, 2, GREEN, BLACK, false);
+  sprintf(buf, "%d mins", (int)mbefore); Tft.drawString(buf, 160, 0, 2, GREEN, BLACK, false);
+  
+  if(mint%50) {
+   if(mint>0) mint=(mint/50)*50;
+   else mint=(mint/50-1)*50;
+  }
+  
+  if(maxt%50) {
+   if(maxt>0) maxt=(maxt/50+1)*50;
+   else maxt=(maxt/50)*50;
+  }
+  
+  if(maxt==mint) {mint-=50; maxt+=50;}
+  
+  int16_t tdiff=maxt-mint;
+   
+  Tft.drawRectangle(0, chart_top, chart_width, chart_height, WHITE);
+  Tft.drawString(printTemp(buf, maxt, 0), chart_width, chart_top, 2, GREEN, BLACK, false);
+  Tft.drawString(printTemp(buf, mint, 0), chart_width, chart_top+chart_height-16, 2, GREEN, BLACK, false);
+  
+  int y0=0;
+  if(maxt>=0 && mint<=0) { // draw zero line
+    y0=(int32_t)(maxt-0)*chart_height/tdiff; // from top
+    Tft.drawHorizontalLine(0, chart_top+y0,chart_width,BLUE);
+  }
+  
+  //const int chart_xstep_denom=15;
+  //const int chart_xstep_nom=2;
+ 
+  int xstep = chart_width/DUR_24;
+  int x=0;   
+  for(int i=0; i<DUR_24; i++) {
+    // should be up from zerolinr if positive, down if negative...THIS IS TODO
+    Tft.fillRectangle(x+1, chart_top+20, xstep-2, chart_height/2, WHITE);
+    x+=xstep;
   }
   
   /*
@@ -785,23 +920,25 @@ void chartHist60(uint8_t sid) {
 }
 
 void btn1Pressed() {
- attachInterrupt(BUTTON_1, btn1Released, RISING);
  bst1 |= WS_BUT_PRES; 
+ bt1cnt=0;
+ attachInterrupt(BUTTON_1, btn1Released, RISING);
 }
 
 void btn1Released() {
- attachInterrupt(BUTTON_1, btn1Pressed, FALLING);
  bst1 &= ~WS_BUT_PRES;
+ attachInterrupt(BUTTON_1, btn1Pressed, FALLING);
 }
 
 void btn2Pressed() {
+ bst2 |= WS_BUT_PRES;
+ bt2cnt=0;
  attachInterrupt(BUTTON_2, btn2Released, RISING);
- bst2=1;
 }
 
 void btn2Released() {
+ bst2 &= ~WS_BUT_PRES;
  attachInterrupt(BUTTON_2, btn2Pressed, FALLING);
- bst2=0;
 }
 
 uint8_t radioSetup() {
