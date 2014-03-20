@@ -210,6 +210,8 @@ void setup()
  
  acc_prev_time=millis();
  mdisp=mui=millis();
+ 
+ updateScreen(true);
 }
 
 void loop()
@@ -411,7 +413,8 @@ void dispTimeout(unsigned long dt, bool reset, int x, int y, int sz) {
     p_days=days;
   }
   else {
-     disp_3(tmp, p_to, x, y, sz, GREEN, ':', false);
+     //disp_3(tmp, p_to, x, y, sz, GREEN, ':', false);
+     disp_dig(reset, 3, 2, tmp, p_to, x, y, sz, GREEN, ':');
   }     
 }
 
@@ -452,19 +455,24 @@ void printDate(bool reset){
   Wire.endTransmission();
   Wire.requestFrom(DS1307_ADDRESS, 7);
   int i;
-  for(i=0; i<2; i++) tmp[i]=bcdToDec(Wire.read()); //s/m
-  tmp[2]=bcdToDec(Wire.read() & 0b111111); //24 hour time  
+  //for(i=0; i<2; i++) tmp[i]=bcdToDec(Wire.read()); //s/m
+  //tmp[2]=bcdToDec(Wire.read() & 0b111111); //24 hour time
+  for(i=0; i<2; i++) tmp[2-i]=bcdToDec(Wire.read()); //s/m 
+  tmp[0]=bcdToDec(Wire.read() & 0b111111); //24 hour time 
   //disp_3(tmp, p_time, 0, 40, 4, YELLOW, ':', true);
   disp_dig(reset, 2, 2, tmp, p_time, 0, 40, 4, YELLOW, ':');
   Wire.read(); // 0-6 -> sunday - Saturday  
   for(i=0; i<3; i++) tmp[i]=bcdToDec(Wire.read()); //d/m/y  
-  disp_3(tmp, p_date, 0, 0, 2, RED, '/', false);
+  //disp_3(tmp, p_date, 0, 0, 2, RED, '/', false);
+  disp_dig(reset, 3, 2, tmp, p_date, 0, 0, 2, RED, '/');
+  
 }
 
 void timeUp(int dig) {
   
 }
 
+/*
 void disp_3(byte *data, byte *p_data, int x, int y, int sz, int color, char delim, bool ss) {
   char sbuf[8];
   int posX=x;
@@ -479,19 +487,22 @@ void disp_3(byte *data, byte *p_data, int x, int y, int sz, int color, char deli
     posX+=FONT_SPACE*sz*(i?3:2);
   }
 }
+*/
 
 void disp_dig(byte redraw, byte ngrp, byte nsym, byte *data, byte *p_data, int x, int y, int sz, int color, char delim) {
   char sbuf[8];
   int posX=x;
   for(byte igrp=0; igrp<ngrp; igrp++) {  
     if(igrp) {
-      if(redraw) Tft.drawChar(delim, posX, y, sz, color, BLACK, true);  
+      if(redraw) 
+        Tft.drawChar(delim, posX, y, sz, color, BLACK, true);  
       posX+=FONT_SPACE*sz;
     }
     for(byte isym=0; isym<nsym; isym++) {
-       byte div10=(isym=0?10:1);
+       byte div10=(isym==0?10:1);
        if(redraw || (data[igrp]/div10)%10!=(p_data[igrp]/div10)%10)
-         Tft.drawChar('0'+(data[igrp]/div10)%10,posX,y,sz, color, BLACK, true);  
+         Tft.drawChar('0'+(data[igrp]/div10)%10,posX,y,sz, color, BLACK, true); 
+        //Tft.drawChar('0',posX,y,sz, color, BLACK, true); 
        posX+=FONT_SPACE*sz;
     }
     p_data[igrp]=data[igrp];
@@ -760,7 +771,7 @@ void chartHist(uint8_t sid) { // this is not a correct time-chart...just a seque
   Tft.drawString(printTemp(buf, maxt, 0), chart_width, chart_top, 2, GREEN, BLACK, false);
   Tft.drawString(printTemp(buf, mint, 0), chart_width, chart_top+chart_height-16, 2, GREEN, BLACK, false);
   
-  int y0;
+  int y0, x0;
   if(maxt>=0 && mint<=0) { // draw zero line
     y0=(int32_t)(maxt-0)*chart_height/tdiff; // from top
     Tft.drawHorizontalLine(0, chart_top+y0,chart_width,BLUE);
@@ -768,26 +779,30 @@ void chartHist(uint8_t sid) { // this is not a correct time-chart...just a seque
   
   Tft.drawVerticalLine(mbefore*chart_xstep_nom/chart_xstep_denom, chart_top, chart_height,BLUE); // now
   
-  mbefore-=interval(acc_prev_time)/60000L; //!!!!!!!!!!!!!!
+  //mbefore-=interval(acc_prev_time)/60000L; //!!!!!!!!!!!!!!
   cnt=0;
-  y0=(int32_t)(maxt-hist[prev].temp)*chart_height/tdiff;
+  x0=y0=0;
+  //y0=(int32_t)(maxt-hist[prev].temp)*chart_height/tdiff;
   prev=lst; 
   do {
-    int y=(int32_t)(maxt-hist[prev].temp)*chart_height/tdiff;
+    int y1=(int32_t)(maxt-hist[prev].temp)*chart_height/tdiff;
+    //int x1=(mbefore-hist[prev].mins)*chart_xstep_nom/chart_xstep_denom;
+    int x1=(mbefore)*chart_xstep_nom/chart_xstep_denom;
     /*
     if(cnt) // !!!!!!!
       Tft.drawLine(hpos,chart_top+y0,hpos-chart_xstep,chart_top+y,GREEN);
       */
     if(cnt)  {
-      int x1=(mbefore-hist[prev].mins)*chart_xstep_nom/chart_xstep_denom;
-      int x0=mbefore*chart_xstep_nom/chart_xstep_denom;
+      //int x1=(mbefore-hist[prev].mins)*chart_xstep_nom/chart_xstep_denom;
+      //int x0=mbefore*chart_xstep_nom/chart_xstep_denom;
       if(cnt<3) {
-        sprintf(buf, "%d -> %d | ", (int)(mbefore-hist[prev].mins), (int)mbefore ); Tft.drawString(buf, 10, FONT_Y*2*cnt, 2, RED, BLACK, false);
-        sprintf(buf, "%d -> %d", x1, x0); Tft.drawString(buf, 120, FONT_Y*2*cnt, 2, RED, BLACK, false);
+        //sprintf(buf, "%d -> %d | ", (int)(mbefore-hist[prev].mins), (int)mbefore ); Tft.drawString(buf, 10, FONT_Y*2*cnt, 2, RED, BLACK, false);
+        sprintf(buf, "%d -> %d", x1, x0); Tft.drawString(buf, 140, FONT_Y*2*cnt, 2, RED, BLACK, false);
       }
-      Tft.drawLine(x1,chart_top+y,x0,chart_top+y0,GREEN);
+      Tft.drawLine(x1,chart_top+y1,x0,chart_top+y0,GREEN);
     }
-    y0=y;
+    y0=y1;
+    x0=x1;
     prev=prev==0?WS_HIST_SZ-1 : prev-1; 
     mbefore-=hist[prev].mins;
     cnt++;
@@ -847,10 +862,10 @@ void chartHist60(uint8_t sid) {
   Tft.drawString(printTemp(buf, maxt, 0), chart_width, chart_top, 2, GREEN, BLACK, false);
   Tft.drawString(printTemp(buf, mint, 0), chart_width, chart_top+chart_height-16, 2, GREEN, BLACK, false);
   
-  int y0=0;
+  int y_z=0;
   if(maxt>=0 && mint<=0) { // draw zero line
-    y0=(int32_t)(maxt-0)*chart_height/tdiff; // from top
-    Tft.drawHorizontalLine(0, chart_top+y0,chart_width,BLUE);
+    y_z=(int32_t)(maxt-0)*chart_height/tdiff; // from top
+    Tft.drawHorizontalLine(0, chart_top+y_z,chart_width,BLUE);
   }
   
   //const int chart_xstep_denom=15;
@@ -860,7 +875,20 @@ void chartHist60(uint8_t sid) {
   int x=0;   
   for(int i=0; i<DUR_24; i++) {
     // should be up from zerolinr if positive, down if negative...THIS IS TODO
-    Tft.fillRectangle(x+1, chart_top+20, xstep-2, chart_height/2, WHITE);
+    int val=i%2 ? maxt/2 : mint/2;
+    //int y1=(int32_t)(maxt-val)*chart_height/tdiff;
+    int y0=0;
+    int h;
+    if(val<0) {
+      h=(int32_t)(-val)*chart_height/tdiff;
+      if(maxt<0) y0=0; else y0=y_z;
+    }
+    else {
+      h=(int32_t)(val)*chart_height/tdiff;
+      if(maxt>0) y0=chart_height; else y0=y_z;
+      y0-=h;
+    }
+    Tft.fillRectangle(x+1, y0, xstep-2, h, WHITE);
     x+=xstep;
   }
   
