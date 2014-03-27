@@ -4,7 +4,9 @@
 
 #include <I2C_SoftwareLibrary.h>
 
-#define DS1307_ADDRESS 0x68
+#include "RTClibSS.h"
+
+//-------- #define DS1307_ADDRESS 0x68
 
 
 // F5529 PINOUT
@@ -50,8 +52,10 @@
 */
 
 SoftwareWire Wire(SW_SDA_PIN, SW_SCL_PIN); ///< Instantiate SoftwareWire
+RTC_DS1307_SS RTC;
 
 NRF24 nrf24(NRF_CE_PIN, NRF_SS_CSN_PIN);
+
 
 struct wt_msg {
   uint8_t msgt;
@@ -144,6 +148,8 @@ const char *lnames[WS_NUILEV] = {"main", "hist", "chart", "chr60", "stat", "set"
 
 #define WS_CHAR_UP 128
 #define WS_CHAR_DN 129
+#define WS_CHAR_TIME_SZ  4
+#define WS_CHAR_TIME_SET_SZ  6
 
 const int chart_width=240;
 const int chart_height=220;
@@ -156,7 +162,6 @@ unsigned long mbloff;
 unsigned long mdisp;
 unsigned long mui;
 uint8_t ledon=0;
-uint8_t bst1=WS_BUT_NONE, bst2=WS_BUT_NONE;
 uint8_t bt1cnt=0, bt2cnt=0;
 uint8_t uilev=0;
 uint8_t editmode=0;
@@ -186,6 +191,7 @@ void setup()
   dispStat("INIT I2C");
     
   Wire.begin(); // I2C Init
+  RTC.begin();
   
   dispStat("INIT NRF");
   err = radioSetup();
@@ -205,8 +211,9 @@ void setup()
     }
   }
 
- attachInterrupt(BUTTON_1, btn1Pressed, FALLING);
- attachInterrupt(BUTTON_2, btn2Pressed, FALLING);
+ if(digitalRead(BUTTON_1)==LOW) {
+   dispStat("TEST MOD");
+ }
  
  acc_prev_time=millis();
  mdisp=mui=millis();
@@ -245,9 +252,11 @@ void loop()
      uilev=0;
      updateScreen(true);
    }
-   if(bst1&WS_BUT_PRES) {
-     if(bt1cnt<100) bt1cnt++;
-   }
+    
+   if(digitalRead(BUTTON_1)==LOW) {
+     if(!bt1cnt) { bt1cnt=1; dispStat("PRESSED   "); }
+     else if(bt1cnt<100) bt1cnt++;
+   } 
    else if(bt1cnt) {
      sprintf(buf, "%d  ", (int)bt1cnt);
      Tft.drawString(buf,200,211,2, WHITE, BLACK, true);
@@ -262,22 +271,23 @@ void loop()
      bt1cnt=0;
    }
    
-   if(bst2&WS_BUT_PRES) {
-     if(bt2cnt<100) bt2cnt++;
-   }
-   else if(bt2cnt) {
+   if(digitalRead(BUTTON_2)==LOW) {
+     if(!bt2cnt) { bt2cnt=1; dispStat("PRESSED   "); }
+     else if(bt2cnt<100) bt2cnt++;
+   } else 
+   if(bt2cnt) {
      sprintf(buf, "%d  ", (int)bt2cnt);
      Tft.drawString(buf,200,211,2, WHITE, BLACK, true);
-     if(bt2cnt<2) {dispStat("DEBOUNC2");} // debounce
+     if(bt2cnt<2) {dispStat("DEBOUNCE");} // debounce
      else if(bt2cnt<20) { // short click       
-       dispStat("SHORTCL2");
+       dispStat("SHORTCLK");
        processShortRightClick();
      } else { // long click  
-       dispStat("LONGCLK2");
+         dispStat("LONGCLK.");
      }
      bt2cnt=0;
    }
-   
+     
    if(ms-mdisp > 500 || mdisp>ms) { // 0.5 sec screen update
      mdisp=ms;   
      if(!(alarms&WS_ALR_TO) && millis()-rf_millis>WS_SENS_TIMEOUT) { //!!!
@@ -300,10 +310,10 @@ void processShortClick() {
   else {
     if(uilev==WS_UI_SET) {
       dispStat("EDIT MOV");
-      Tft.drawRectangle(FONT_SPACE*4*(editmode<3?editmode-1:editmode), 40, FONT_SPACE*4, FONT_Y*4, BLACK);  
+      Tft.drawRectangle(FONT_SPACE*WS_CHAR_TIME_SET_SZ*(editmode<3?editmode-1:editmode), 40, FONT_SPACE*WS_CHAR_TIME_SET_SZ, FONT_Y*WS_CHAR_TIME_SET_SZ, BLACK);  
       editmode++;
       if(editmode>4) editmode=1;
-      Tft.drawRectangle(FONT_SPACE*4*(editmode<3?editmode-1:editmode), 40, FONT_SPACE*4, FONT_Y*4, BLUE);
+      Tft.drawRectangle(FONT_SPACE*WS_CHAR_TIME_SET_SZ*(editmode<3?editmode-1:editmode), 40, FONT_SPACE*WS_CHAR_TIME_SET_SZ, FONT_Y*WS_CHAR_TIME_SET_SZ, WHITE);
     }
   }
 }
@@ -313,11 +323,13 @@ void processLongClick() {
     if(!editmode) {
       dispStat("EDIT  ON");
       editmode=1;
-      Tft.drawRectangle(0, 40, FONT_SPACE*4, FONT_Y*4, BLUE);
+      Tft.drawRectangle(0, 40, FONT_SPACE*WS_CHAR_TIME_SET_SZ, FONT_Y*WS_CHAR_TIME_SET_SZ, WHITE);
     } else {
       dispStat("EDIT OFF");
+      timeStore();
       editmode=0;      
-      Tft.drawRectangle(FONT_SPACE*4*(editmode<3?editmode-1:editmode), 40, FONT_SPACE*4, FONT_Y*4, BLACK);  
+      Tft.drawRectangle(FONT_SPACE*WS_CHAR_TIME_SET_SZ*(editmode<3?editmode-1:editmode), 40, FONT_SPACE*WS_CHAR_TIME_SET_SZ, FONT_Y*WS_CHAR_TIME_SET_SZ, BLACK);        
+      dispStat("TIME STOR");
     }
   }
 }
@@ -325,7 +337,8 @@ void processLongClick() {
 void processShortRightClick() {
   if(!editmode) return;
   if(uilev!=WS_UI_SET) return;
-  timeUp(editmode-1);
+  timeUp(editmode-1, WS_CHAR_TIME_SET_SZ);
+  Tft.drawRectangle(FONT_SPACE*WS_CHAR_TIME_SET_SZ*(editmode<3?editmode-1:editmode), 40, FONT_SPACE*WS_CHAR_TIME_SET_SZ, FONT_Y*WS_CHAR_TIME_SET_SZ, WHITE);
 }       
 
 void updateScreen(bool refresh) {
@@ -384,13 +397,13 @@ void updateScreen(bool refresh) {
 
 void updateScreenTime(bool reset) {
   if(uilev==WS_UI_MAIN) {
-    printDate(reset);   
+    printDate(reset, WS_CHAR_TIME_SZ);   
     dispTimeout(millis()-last_millis_temp, reset, 0, 160, 2);
   } else if(uilev==WS_UI_SET) {
       if(editmode) {
         ;
       }
-      else printDate(reset);   
+      else printDate(reset, WS_CHAR_TIME_SET_SZ);   
   }
 }
 
@@ -405,7 +418,7 @@ void dispTimeout(unsigned long dt, bool reset, int x, int y, int sz) {
     memset(p_to, -1, 3);
   } 
   unsigned long ts=dt/1000;
-  tmp[0]=ts%60; tmp[1]=(ts/60)%60; tmp[2]=(ts/3600)%24;
+  tmp[2]=ts%60; tmp[1]=(ts/60)%60; tmp[0]=(ts/3600)%24;
   uint8_t days=ts/3600/24;  
   if(days>0 && days!=p_days) {
     sprintf(buf, "> %d days", days);
@@ -413,8 +426,7 @@ void dispTimeout(unsigned long dt, bool reset, int x, int y, int sz) {
     p_days=days;
   }
   else {
-     //disp_3(tmp, p_to, x, y, sz, GREEN, ':', false);
-     disp_dig(reset, 3, 2, tmp, p_to, x, y, sz, GREEN, ':');
+     disp_dig(reset, 3, 2, tmp, p_to, x, y, sz, GREEN, ':', 0);
   }     
 }
 
@@ -433,13 +445,10 @@ char *printTemp(char *buf, int16_t disptemp, int8_t showg) {
   return buf;
 } 
 
-byte bcdToDec(byte val)  { // Convert binary coded decimal to normal decimal numbers
-  return ( (val/16*10) + (val%16) );
-}
+static byte p_date[3]={-1,-1,-1};
+static byte p_time[3]={-1,-1,-1};
 
-void printDate(bool reset){
-  static byte p_date[3]={-1,-1,-1};
-  static byte p_time[3]={-1,-1,-1};
+void printDate(bool reset, int sz){
   byte tmp[3];  
   char sbuf[8];
   
@@ -447,54 +456,42 @@ void printDate(bool reset){
     memset(p_date, -1, 3);
     memset(p_time, -1, 3);
   }
-  
- // Reset the register pointer
-  Wire.beginTransmission(DS1307_ADDRESS);
-  byte zero = 0x00;
-  Wire.write(zero);
-  Wire.endTransmission();
-  Wire.requestFrom(DS1307_ADDRESS, 7);
-  int i;
-  //for(i=0; i<2; i++) tmp[i]=bcdToDec(Wire.read()); //s/m
-  //tmp[2]=bcdToDec(Wire.read() & 0b111111); //24 hour time
-  for(i=0; i<2; i++) tmp[2-i]=bcdToDec(Wire.read()); //s/m 
-  tmp[0]=bcdToDec(Wire.read() & 0b111111); //24 hour time 
-  //disp_3(tmp, p_time, 0, 40, 4, YELLOW, ':', true);
-  disp_dig(reset, 2, 2, tmp, p_time, 0, 40, 4, YELLOW, ':');
-  Wire.read(); // 0-6 -> sunday - Saturday  
-  for(i=0; i<3; i++) tmp[i]=bcdToDec(Wire.read()); //d/m/y  
-  //disp_3(tmp, p_date, 0, 0, 2, RED, '/', false);
-  disp_dig(reset, 3, 2, tmp, p_date, 0, 0, 2, RED, '/');
-  
+ 
+  DateTime now = RTC.now();
+  tmp[0]=now.hour(); tmp[1]=now.minute(); tmp[2]=now.second();
+  disp_dig(reset, 2, 2, tmp, p_time, 0, 40, sz, YELLOW, p_time[2]%2 ? ':' : ' ', tmp[2]!=p_time[2]);
+  p_time[2]=tmp[2];
+  tmp[0]=now.day(); tmp[1]=now.month(); tmp[2]=now.year();
+  disp_dig(reset, 3, 2, tmp, p_date, 0, 0, 2, RED, '/', false);
+ 
 }
 
-void timeUp(int dig) {
-  
+void timeUp(int dig, int sz) {
+  int ig=dig/2;
+  int id=(dig+1)%2; 
+  byte val=p_time[ig];
+  byte maxv[3]={24, 60, 60};
+  if(id) { val+=10; if(val>maxv[ig]) val=val%10; /*val=maxv[ig];*/}  
+  else { val=(val/10)*10+((val%10)+1)%10; if(val>maxv[ig]) val=(val/10)*10;} 
+
+  byte tmp[3];
+  memcpy(tmp, p_time, 3);
+  tmp[ig]=val;
+  disp_dig(false, 2, 2, tmp, p_time, 0, 40, sz, YELLOW, ':', true);
 }
 
-/*
-void disp_3(byte *data, byte *p_data, int x, int y, int sz, int color, char delim, bool ss) {
-  char sbuf[8];
-  int posX=x;
-  for(int i=2;i>=0;i--) {    
-    if(p_data[i]!=data[i]) {
-      sprintf(sbuf, "%02.2d", (int)data[i]);
-      if(i) { sbuf[2]=delim; sbuf[3]=0; }
-      else if(ss) sz/=2;
-      Tft.drawString(sbuf,posX,y,sz, color, BLACK, true);  
-      p_data[i]=data[i];
-    }
-    posX+=FONT_SPACE*sz*(i?3:2);
-  }
+void timeStore() {
+  DateTime now=RTC.now();
+  DateTime set(now.year(), now.month(), now.day(), p_time[0], p_time[1], 0);
+  RTC.adjust(set); 
 }
-*/
 
-void disp_dig(byte redraw, byte ngrp, byte nsym, byte *data, byte *p_data, int x, int y, int sz, int color, char delim) {
+void disp_dig(byte redraw, byte ngrp, byte nsym, byte *data, byte *p_data, int x, int y, int sz, int color, char delim, byte drdrm) {
   char sbuf[8];
   int posX=x;
   for(byte igrp=0; igrp<ngrp; igrp++) {  
     if(igrp) {
-      if(redraw) 
+      if(redraw || drdrm) 
         Tft.drawChar(delim, posX, y, sz, color, BLACK, true);  
       posX+=FONT_SPACE*sz;
     }
@@ -502,7 +499,6 @@ void disp_dig(byte redraw, byte ngrp, byte nsym, byte *data, byte *p_data, int x
        byte div10=(isym==0?10:1);
        if(redraw || (data[igrp]/div10)%10!=(p_data[igrp]/div10)%10)
          Tft.drawChar('0'+(data[igrp]/div10)%10,posX,y,sz, color, BLACK, true); 
-        //Tft.drawChar('0',posX,y,sz, color, BLACK, true); 
        posX+=FONT_SPACE*sz;
     }
     p_data[igrp]=data[igrp];
@@ -518,7 +514,6 @@ void dispErr() {
 void dispStat(char *buf) {
   Tft.drawString(buf,0,211,2, GREEN, BLACK, true);
 }
-
 
 
 /****************** HIST ****************/
@@ -540,7 +535,6 @@ uint8_t addHistAcc(struct wt_msg *pmsg) {
   last_tmp=pmsg->temp; 
   acc.cnt++;
   acc.temp+=pmsg->temp;
-  //mins=(millis()-acc_prev_time)/60000L; // TEMPORARILY (NEED TO HANDLE WRAPAROUND)!!!!
   mins=interval(acc_prev_time)/60000L;
   last_millis_temp=millis();
   if(mins>=WS_ACC_TIME) { 
@@ -586,7 +580,6 @@ void printHist(uint8_t sid) {
     return;
   }
   uint8_t prev=lst;
-  //int mbefore=(millis()-acc_prev_time)/60000L; // TEMPORARILY (NEED TO HANDLE WRAPAROUND)!!!!;
   int mbefore=interval(acc_prev_time)/60000L;
   uint8_t vpos=0;
   char buf[16];
@@ -782,21 +775,12 @@ void chartHist(uint8_t sid) { // this is not a correct time-chart...just a seque
   //mbefore-=interval(acc_prev_time)/60000L; //!!!!!!!!!!!!!!
   cnt=0;
   x0=y0=0;
-  //y0=(int32_t)(maxt-hist[prev].temp)*chart_height/tdiff;
   prev=lst; 
   do {
     int y1=(int32_t)(maxt-hist[prev].temp)*chart_height/tdiff;
-    //int x1=(mbefore-hist[prev].mins)*chart_xstep_nom/chart_xstep_denom;
     int x1=(mbefore)*chart_xstep_nom/chart_xstep_denom;
-    /*
-    if(cnt) // !!!!!!!
-      Tft.drawLine(hpos,chart_top+y0,hpos-chart_xstep,chart_top+y,GREEN);
-      */
     if(cnt)  {
-      //int x1=(mbefore-hist[prev].mins)*chart_xstep_nom/chart_xstep_denom;
-      //int x0=mbefore*chart_xstep_nom/chart_xstep_denom;
       if(cnt<3) {
-        //sprintf(buf, "%d -> %d | ", (int)(mbefore-hist[prev].mins), (int)mbefore ); Tft.drawString(buf, 10, FONT_Y*2*cnt, 2, RED, BLACK, false);
         sprintf(buf, "%d -> %d", x1, x0); Tft.drawString(buf, 140, FONT_Y*2*cnt, 2, RED, BLACK, false);
       }
       Tft.drawLine(x1,chart_top+y1,x0,chart_top+y0,GREEN);
@@ -875,20 +859,24 @@ void chartHist60(uint8_t sid) {
   int x=0;   
   for(int i=0; i<DUR_24; i++) {
     // should be up from zerolinr if positive, down if negative...THIS IS TODO
-    int val=i%2 ? maxt/2 : mint/2;
+    int val=i%2 ? (maxt+mint)/2+(maxt-mint)/4 : (maxt+mint)/2-(maxt-mint)/4;
     //int y1=(int32_t)(maxt-val)*chart_height/tdiff;
     int y0=0;
     int h;
     if(val<0) {
-      h=(int32_t)(-val)*chart_height/tdiff;
+      h=(int32_t)(maxt-val)*chart_height/tdiff;
       if(maxt<0) y0=0; else y0=y_z;
     }
     else {
-      h=(int32_t)(val)*chart_height/tdiff;
-      if(maxt>0) y0=chart_height; else y0=y_z;
+      h=(int32_t)(maxt-val)*chart_height/tdiff;
+      if(mint>0) { /*Tft.drawString("*", 0, FONT_Y*2*i, 2, RED, BLACK, false);*/ y0=chart_height;} else y0=y_z;
       y0-=h;
     }
-    Tft.fillRectangle(x+1, y0, xstep-2, h, WHITE);
+    if(i<2) {
+            sprintf(buf, "%d ", val); Tft.drawString(buf, 40, FONT_Y*2*i, 2, RED, BLACK, false);
+            sprintf(buf, "%d / %d", y0, h); Tft.drawString(buf, 140, FONT_Y*2*i, 2, RED, BLACK, false);  
+  }
+    Tft.fillRectangle(x+1, chart_top+y0, xstep-2, h, WHITE);
     x+=xstep;
   }
   
@@ -947,6 +935,7 @@ void chartHist60(uint8_t sid) {
  */
 }
 
+/*
 void btn1Pressed() {
  bst1 |= WS_BUT_PRES; 
  bt1cnt=0;
@@ -968,6 +957,7 @@ void btn2Released() {
  bst2 &= ~WS_BUT_PRES;
  attachInterrupt(BUTTON_2, btn2Pressed, FALLING);
 }
+*/
 
 uint8_t radioSetup() {
   if (!nrf24.init())
