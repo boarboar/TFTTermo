@@ -441,6 +441,7 @@ void TFT::drawVerticalLine( INT16U poX, INT16U poY, INT16U length,INT16U color)
        sendData(color);
 }
 
+/*
 void TFT::drawVerticalDashedLine( INT16U poX, INT16U poY, INT16U length,INT16U color, INT16U bkcolor, INT8U mask)
 {
     setCol(poX,poX);
@@ -450,10 +451,26 @@ void TFT::drawVerticalDashedLine( INT16U poX, INT16U poY, INT16U length,INT16U c
     for(int i=0; i<length; i++)
 	   sendData((mask>>(i&0x07))&0x01 ? color : bkcolor);
 }
+*/
+
+void TFT::drawStraightDashedLine(INT8U dir, INT16U poX, INT16U poY, INT16U length,INT16U color, INT16U bkcolor, INT8U mask)
+{
+    if(dir==LCD_HORIZONTAL) {
+      setCol(poX,poX + length);
+      setPage(poY,poY);
+    } else {
+      setCol(poX,poX);
+      setPage(poY,poY+length);
+    }
+    
+    sendCMD(0x2c);	
+    for(int i=0; i<length; i++)
+	   sendData((mask>>(i&0x07))&0x01 ? color : bkcolor);
+}
+
 
 void TFT::drawLine( INT16U x0,INT16U y0,INT16U x1, INT16U y1,INT16U color)
 {
-
     int x = x1-x0;
     int y = y1-y0;
     int dx = abs(x), sx = x0<x1 ? 1 : -1;
@@ -471,9 +488,35 @@ void TFT::drawLine( INT16U x0,INT16U y0,INT16U x1, INT16U y1,INT16U color)
             err += dx; y0 += sy;
         }
     }
-
 }
 
+void TFT::drawLineThick(INT16U x0,INT16U y0,INT16U x1,INT16U y1,INT16U color,INT8U th)
+{
+    int x = x1-x0;
+    int y = y1-y0;
+    int dx = abs(x), sx = x0<x1 ? 1 : -1;
+    int dy = -abs(y), sy = y0<y1 ? 1 : -1;
+    int err = dx+dy, e2;                                                /* error value e_xy             */
+    for (;;){                                                           /* loop                         */
+//        setPixel(x0,y0,color);
+        e2 = 2*err;
+        if (e2 >= dy) {                   /* e_xy+e_x > 0                 */
+            setPixel(x0,y0-1,color);
+            setPixel(x0,y0,color);
+            setPixel(x0,y0+1,color);
+            if (x0 == x1) break;
+            err += dy; x0 += sx;
+        }
+        if (e2 <= dx) {                   /* e_xy+e_y < 0                 */
+            setPixel(x0-1,y0,color);
+            setPixel(x0,y0,color);
+            setPixel(x0+1,y0,color);
+            if (y0 == y1) break;
+            err += dx; y0 += sy;
+        }
+    }
+}
+        
 void TFT::drawRectangle(INT16U poX, INT16U poY, INT16U length, INT16U width,INT16U color)
 {
     drawHorizontalLine(poX, poY, length, color);

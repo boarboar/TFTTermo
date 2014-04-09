@@ -1,10 +1,11 @@
-#include <TFTv2.h>
+//#include <TFTv2.h>
 #include <SPI.h>
 #include <NRF24.h>
 
 #include <I2C_SoftwareLibrary.h>
 
 #include "RTClibSS.h"
+#include "TFT_ILI9341.h"
 
 //-------- #define DS1307_ADDRESS 0x68
 
@@ -152,7 +153,7 @@ const char *lnames[WS_NUILEV] = {"main", "chart", "chr60", "stat", "set"};
 #define WS_CHAR_TIME_SET_SZ  6
 
 const int chart_width=240;
-const int chart_height=220;
+const int chart_height=204;
 const int chart_top=19;
 
 #define WS_BUT_NONE  0x00
@@ -342,7 +343,7 @@ void updateScreen(bool refresh) {
     case WS_UI_MAIN: {
      uint16_t ent, frc;     
      if((prev_tmp!=last_tmp || refresh) && last_tmp!=HIST_NODATA) {
-       int16_t diff = getHistDiff(1);
+       int16_t diff = getHistDiff(last_tmp, 1);
        Tft.drawString(printTemp(buf, last_tmp, 1), 0, 80,6, alarms&WS_ALR_TO ? RED : GREEN, BLACK, true);
        Tft.drawChar( diff==0? ' ': diff>0 ? WS_CHAR_UP : WS_CHAR_DN, FONT_SPACE*6*7, 80, 4, YELLOW, BLACK, true);
      }
@@ -389,14 +390,17 @@ void updateScreen(bool refresh) {
 }
 
 void updateScreenTime(bool reset) {
+  DateTime now = RTC.now();
   if(uilev==WS_UI_MAIN) {
-    printDate(reset, WS_CHAR_TIME_SZ);   
+    //printDate(reset, WS_CHAR_TIME_SZ);   
+    printTime(&now, reset, 0, 40, WS_CHAR_TIME_SZ);   
     dispTimeout(millis()-last_millis_temp, reset, 0, 160, 2);
   } else if(uilev==WS_UI_SET) {
       if(editmode) {
         ;
       }
-      else printDate(reset, WS_CHAR_TIME_SET_SZ);   
+      //else printDate(reset, WS_CHAR_TIME_SET_SZ);   
+      else printTime(&now, reset, 0, 40, WS_CHAR_TIME_SET_SZ);   
   }
 }
 
@@ -439,6 +443,7 @@ char *printTemp(char *buf, int16_t disptemp, int8_t showg) {
 static byte p_date[3]={-1,-1,-1};
 static byte p_time[3]={-1,-1,-1};
 
+/*
 void printDate(bool reset, int sz){
   byte tmp[3];  
   char sbuf[8];  
@@ -448,7 +453,20 @@ void printDate(bool reset, int sz){
   p_time[2]=tmp[2];
   tmp[0]=now.day(); tmp[1]=now.month(); tmp[2]=now.year()-2000;
   disp_dig(reset, 3, 2, tmp, p_date, 0, 0, 2, RED, '/', false);
- 
+}
+*/
+
+void printTime(DateTime *pDT, bool reset, int x, int y, int sz){
+  byte tmp[3];  
+  char sbuf[8];  
+  //DateTime now = RTC.now();
+  tmp[0]=pDT->hour(); tmp[1]=pDT->minute(); tmp[2]=pDT->second();
+  disp_dig(reset, 2, 2, tmp, p_time, 0, 40, sz, YELLOW, p_time[2]%2 ? ':' : ' ', tmp[2]!=p_time[2]);
+  p_time[2]=tmp[2];
+  /*
+  tmp[0]=now.day(); tmp[1]=now.month(); tmp[2]=now.year()-2000;
+  disp_dig(reset, 3, 2, tmp, p_date, 0, 0, 2, RED, '/', false);
+  */
 }
 
 void timeUp(int dig, int sz) {
@@ -458,7 +476,6 @@ void timeUp(int dig, int sz) {
   byte maxv[3]={24, 60, 60};
   if(id) { val+=10; if(val>maxv[ig]) val=val%10; /*val=maxv[ig];*/}  
   else { val=(val/10)*10+((val%10)+1)%10; if(val>maxv[ig]) val=(val/10)*10;} 
-
   byte tmp[3];
   memcpy(tmp, p_time, 3);
   tmp[ig]=val;
@@ -536,12 +553,13 @@ void addHist(uint8_t sid, uint8_t mins, int16_t temp) {
   hist[hist_ptr].temp=temp;
   hist[hist_ptr].mins=mins;
   hist_ptr = (hist_ptr+1)%WS_HIST_SZ; // next (and the oldest reading)
+  // hour accum here...
 }
 
-int16_t getHistDiff(uint8_t sid) {
+int16_t getHistDiff(int16_t val, uint8_t sid) {
   uint8_t lst=hist_ptr==0?WS_HIST_SZ-1 : hist_ptr-1;   
   if(hist[lst].temp==HIST_NODATA) return 0;
-  return last_tmp-hist[lst].temp;
+  return val-hist[lst].temp;
 }
 
 uint8_t getHistSz() {
@@ -580,53 +598,6 @@ void printHist(uint8_t sid) {
   
 }
 
-/*
-int16_t getHistAvg(uint8_t sid, uint16_t from, uint16_t period) { // avearge in from-period .... from  
-  uint8_t lst=hist_ptr==0?WS_HIST_SZ-1 : hist_ptr-1;   
-  if(hist[lst].temp==HIST_NODATA) return HIST_NODATA;
-  uint16_t mbefore=0;
-  uint8_t start=lst;
-  if(from>0) { 
-    do {
-      mbefore+=hist[start].mins;
-      start=start==0?WS_HIST_SZ-1 : start-1; 
-    } while(start!=lst && hist[start].temp!=HIST_NODATA && mbefore<from);  
-    if(start==lst || hist[start].temp==HIST_NODATA) return HIST_NODATA;
-  }
-  
-  mbefore=0;
-  from += period;
-  uint8_t cnt=0;
-  int32_t acc=0;
-  do {
-    mbefore+=hist[start].mins;
-    acc+=hist[start].temp;
-    cnt++;
-    start=start==0?WS_HIST_SZ-1 : start-1; 
-  } while(start!=lst && hist[start].temp!=HIST_NODATA && mbefore<from);
-
-  return acc/cnt;
-}
-
-void printAvg(uint8_t sid) {
-  
-  int16_t avg;
-  lcd.setCursor(0, 0); lcd.print("30m:");
-  for(int i=0; i<3; i++) {
-    avg=getHistAvg(sid, i*30, (i+1)*30-1); 
-    if(avg == HIST_NODATA) break;
-    printTemp(avg);
-  }
-  lcd.setCursor(0, 1); lcd.print("1 h:");
-  for(int i=0; i<3; i++) {
-    avg=getHistAvg(sid, i*60, (i+1)*60-1);
-    if(avg == HIST_NODATA) break;
-    printTemp(avg);
-  } 
-  
-}
-*/
-
 int16_t  adjMinMax(int16_t *pmint, int16_t *pmaxt) {
   if(*pmint%50) {
    if(*pmint>0) *pmint=(*pmint/50)*50;
@@ -652,10 +623,10 @@ void chartHist(uint8_t sid) { // this is not a correct time-chart...just a seque
     Tft.drawString("NO DATA", 40,100, 6, RED, BLACK, false);
     return;
   }
-  maxt=mint=hist[lst].temp;
   mbefore=interval(acc_prev_time)/60000L;
   
   uint8_t prev=lst;  
+  maxt=mint=hist[prev].temp;
   do {
     if(hist[prev].temp>maxt) maxt=hist[prev].temp;
     if(hist[prev].temp<mint) mint=hist[prev].temp;
@@ -680,10 +651,13 @@ void chartHist(uint8_t sid) { // this is not a correct time-chart...just a seque
   int y0, x0;
   if(maxt>=0 && mint<=0) { // draw zero line
     y0=(int32_t)(maxt-0)*chart_height/tdiff; // from top
-    Tft.drawHorizontalLine(0, chart_top+y0,chart_width,BLUE);
+    //Tft.drawHorizontalLine(0, chart_top+y0,chart_width,BLUE);
+    Tft.drawStraightDashedLine(LCD_HORIZONTAL, 0, chart_top+y0,chart_width,BLUE,BLACK, 0x0f);
   }
   
-  Tft.drawVerticalLine(mbefore*chart_xstep_nom/chart_xstep_denom, chart_top, chart_height,BLUE); // now
+  //Tft.drawVerticalLine(mbefore*chart_xstep_nom/chart_xstep_denom, chart_top, chart_height,BLUE); // now
+  //Tft.drawVerticalDashedLine(mbefore*chart_xstep_nom/chart_xstep_denom, chart_top, chart_height,BLUE,BLACK, 0x0f); // now line
+  Tft.drawStraightDashedLine(LCD_VERTICAL, mbefore*chart_xstep_nom/chart_xstep_denom, chart_top, chart_height,BLUE,BLACK, 0x0f); // now line
   
   int cnt=0;
   x0=y0=0;
@@ -697,7 +671,8 @@ void chartHist(uint8_t sid) { // this is not a correct time-chart...just a seque
         sprintf(buf, "%d -> %d", x1, x0); Tft.drawString(buf, 140, FONT_Y*2*cnt, 2, RED, BLACK, false);
       }
       */
-      Tft.drawLine(x1,chart_top+y1,x0,chart_top+y0,GREEN);
+     //Tft.drawLine(x1,chart_top+y1,x0,chart_top+y0,GREEN);
+     Tft.drawLineThick(x1,chart_top+y1,x0,chart_top+y0,GREEN, 3);
     }
     y0=y1;
     x0=x1;
@@ -706,6 +681,9 @@ void chartHist(uint8_t sid) { // this is not a correct time-chart...just a seque
     cnt++;
   } while(prev!=lst && hist[prev].temp!=HIST_NODATA);   
 
+  DateTime now = RTC.now();
+  printTime(&now, true, 0, 204, 2);   
+    
 }
 
 void chartHist60(uint8_t sid) 
@@ -726,15 +704,16 @@ void chartHist60(uint8_t sid)
     return;
   }
     
-  maxt=mint=hist[lst].temp;
-  mbefore=interval(acc_prev_time)/60000L;
-
   for(int i=0; i<DUR_24; i++) {
       cnt[i]=0;
       acc[i]=0;   
   } 
-  
+  mbefore=interval(acc_prev_time)/60000L;
+
   uint8_t prev=lst;  
+
+  maxt=mint=hist[prev].temp;
+  
   do {
     uint8_t islot=mbefore/DUR_MIN;
     if(islot>=0 && islot<DUR_24) {
@@ -760,7 +739,8 @@ void chartHist60(uint8_t sid)
   int y_z=0;
   if(maxt>=0 && mint<=0) { // draw zero line
     y_z=(int32_t)(maxt-0)*chart_height/tdiff; // from top
-    Tft.drawHorizontalLine(0, chart_top+y_z,chart_width,BLUE);
+    //Tft.drawHorizontalLine(0, chart_top+y_z,chart_width,BLUE);
+    Tft.drawStraightDashedLine(LCD_HORIZONTAL, 0, chart_top+y_z,chart_width,BLUE,BLACK, 0x0f);
   }
   
   int xstep = chart_width/DUR_24;
@@ -775,14 +755,10 @@ void chartHist60(uint8_t sid)
       int val=acc[islot]/cnt[islot];
       int y0=0;
       int h;
-      //int h=(int32_t)(val-mint)*chart_height/tdiff;
       if(val<0) {
-        ////h=(int32_t)(maxt-val)*chart_height/tdiff;
-        //if(maxt<0) y0=0; else y0=y_z;
         if(maxt<0) { y0=0; h=(int32_t)(maxt-val)*chart_height/tdiff; } else { y0=y_z; h=(int32_t)(-val)*chart_height/tdiff; }
       }
       else {
-        ////h=(int32_t)(val-mint)*chart_height/tdiff;
         if(mint>0) { y0=chart_height; h=(int32_t)(val-mint)*chart_height/tdiff;} else { y0=y_z; h=(int32_t)(val)*chart_height/tdiff; }
         y0-=h;
       }
