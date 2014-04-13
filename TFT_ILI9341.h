@@ -136,8 +136,6 @@ public:
         void drawLineThick(INT16U x0,INT16U y0,INT16U x1,INT16U y1,INT16U color,INT8U th);
         void drawVerticalLine(INT16U poX, INT16U poY,INT16U length,INT16U color);
         void drawHorizontalLine(INT16U poX, INT16U poY,INT16U length,INT16U color);
-	//void drawVerticalDashedLine( INT16U poX, INT16U poY, INT16U length,INT16U color, INT16U bkolor, INT8U mask);
-	//void drawHorizontalDashedLine( INT16U poX, INT16U poY, INT16U length,INT16U color, INT16U bkolor, INT8U mask);
         void drawStraightDashedLine(INT8U dir, INT16U poX, INT16U poY, INT16U length, INT16U color, INT16U bkolor, INT8U mask);
 
     void drawRectangle(INT16U poX, INT16U poY, INT16U length,INT16U width,INT16U color);

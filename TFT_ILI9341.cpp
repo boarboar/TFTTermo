@@ -441,18 +441,6 @@ void TFT::drawVerticalLine( INT16U poX, INT16U poY, INT16U length,INT16U color)
        sendData(color);
 }
 
-/*
-void TFT::drawVerticalDashedLine( INT16U poX, INT16U poY, INT16U length,INT16U color, INT16U bkcolor, INT8U mask)
-{
-    setCol(poX,poX);
-    setPage(poY,poY+length);
-    sendCMD(0x2c);
-	
-    for(int i=0; i<length; i++)
-	   sendData((mask>>(i&0x07))&0x01 ? color : bkcolor);
-}
-*/
-
 void TFT::drawStraightDashedLine(INT8U dir, INT16U poX, INT16U poY, INT16U length,INT16U color, INT16U bkcolor, INT8U mask)
 {
     if(dir==LCD_HORIZONTAL) {
