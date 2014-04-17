@@ -70,6 +70,6 @@ boolean TempHistory::movePrev() {
   iter_firstmov=0; 
   iter_ptr = iter_ptr==0?TH_HIST_SZ-1 : iter_ptr-1; 
   if(hist[iter_ptr].temp==TH_NODATA) return false;
-  iter_mbefore+=hist[iter_ptr].mins; // points to the moment current average started to accumulate 
+  iter_mbefore+=hist[iter_ptr].mins; // points to the moment iterated average started to accumulate 
   return true;
 } 
