@@ -104,7 +104,7 @@ TempHistory mHist;
 
 // ************************ UI
 
-#define WS_NUILEV 6
+#define WS_NUILEV 5
 #define WS_UI_MAIN  0
 #define WS_UI_CHART 1
 #define WS_UI_CHART60 2
@@ -119,7 +119,7 @@ TempHistory mHist;
 #define WS_UI_SET   4
 #define WS_UI_HIST  5
 
-const char *lnames[WS_NUILEV] = {"main", "chart", "chr60", "stat", "set", "hist"};
+const char *lnames[] = {"main", "chart", "chr60", "stat", "set", "hist"};
 
 #define WS_CHAR_UP 128
 #define WS_CHAR_DN 129
@@ -346,7 +346,13 @@ void updateScreen(bool refresh) {
       for(int i=0; i<=WS_ALR_LAST_IDX; i++) {
         sprintf(buf, "A%d: %d", i, (int)alarm_cnt[i]);
         Tft.drawString(buf,0, 32+16*i, 2, GREEN, BLACK, true); 
-      }            
+      }       
+      /*
+       DateTime now = RTC.now();
+       printTime(&now, true, 100, 224, 2, false);   
+       DateTime start=DateTime(now.unixtime()-(uint32_t)24*60*60);
+       printTime(&start, true, 0, 224, 2, false);        
+   */
     }
     break;
     case WS_UI_SET: {  
@@ -541,7 +547,7 @@ void chartHist(uint8_t sid) { // this is not a correct time-chart...just a seque
   } while(mHist.movePrev() && x0>0);    
   
  if(xr>36) {
-   DateTime start=DateTime(now.unixtime()-mHist.getPrevMinsBefore()*60);
+   DateTime start=DateTime(now.unixtime()-(uint32_t)mHist.getPrevMinsBefore()*60);
    printTime(&start, true, 0, 224, 2, false);   
  }  
 }
