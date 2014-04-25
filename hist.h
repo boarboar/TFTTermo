@@ -1,6 +1,7 @@
 
-#define TH_HIST_SZ  96// 96*15=24 hrs
-#define TH_NODATA 0x0FFF
+// effective storage is TH_HIST_SZ-1
+#define TH_HIST_SZ  24 // 96*15=24 hrs
+//#define TH_NODATA 0x0FFF
 #define TH_ACC_TIME  15 //mins
 
 class TempHistory {
@@ -24,21 +25,24 @@ public:
     uint8_t getSz();
     unsigned long getLastAccTime() { return acc_prev_time; }
     wt_msg_hist *getData() { return hist; }
-    uint8_t getHead() { return hist_ptr==0?TH_HIST_SZ-1 : hist_ptr-1; }
+    uint8_t getPrev(uint8_t pos) { return pos==0?TH_HIST_SZ-1 : pos-1; }
     void iterBegin();
     boolean movePrev(); 
     wt_msg_hist *getPrev() { return &hist[iter_ptr]; }
-    //uint16_t     getPrevMinsBefore() { return iter_mbefore-hist[iter_ptr].mins; }
     uint16_t     getPrevMinsBefore() { return iter_mbefore; }
         
+    uint8_t _getHeadPtr() { return head_ptr; }
+    uint8_t _getTailPtr() { return tail_ptr; }
+    
     static unsigned long interval(unsigned long prev);
 protected:
     uint8_t size;
     wt_msg_hist hist[TH_HIST_SZ];
-    uint8_t hist_ptr; // NEXT record to fill
+    uint8_t head_ptr; // NEXT record to fill
+    uint8_t tail_ptr; // record before last used // TODO
     wt_msg_acc acc;
     unsigned long acc_prev_time;
     uint8_t iter_ptr;
-    uint8_t iter_firstmov;
+    //uint8_t iter_firstmov;
     uint16_t iter_mbefore;
 };
