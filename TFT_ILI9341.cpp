@@ -403,7 +403,7 @@ void TFT::drawChar( INT8U ascii, INT16U poX, INT16U poY,INT16U size, INT16U fgco
     }
 }
 
-void TFT::drawString(const char *string,INT16U poX, INT16U poY, INT16U size,INT16U fgcolor, INT16U bgcolor, bool opaq)
+INT16U TFT::drawString(const char *string,INT16U poX, INT16U poY, INT16U size,INT16U fgcolor, INT16U bgcolor, bool opaq)
 {
     while(*string)
     {
@@ -415,6 +415,7 @@ void TFT::drawString(const char *string,INT16U poX, INT16U poY, INT16U size,INT1
             poX += FONT_SPACE*size;                                     /* Move cursor right            */
         }
     }
+    return poX;
 }
 
 //fillRectangle(poX+i*size, poY+f*size, size, size, fgcolor);

@@ -104,7 +104,7 @@ TempHistory mHist;
 
 // ************************ UI
 
-#define WS_NUILEV 5
+#define WS_NUILEV 6
 #define WS_UI_MAIN  0
 #define WS_UI_CHART 1
 #define WS_UI_CHART60 2
@@ -255,7 +255,7 @@ void loop()
      
    if(ms-mdisp > 500 || mdisp>ms) { // 0.5 sec screen update
      mdisp=ms;   
-     if(!(alarms&WS_ALR_TO) && millis()-rf_millis>WS_SENS_TIMEOUT) { //!!!
+     if(!(alarms&WS_ALR_TO) && /*millis()-rf_millis*/TempHistory::interval(rf_millis)>WS_SENS_TIMEOUT) { 
        alarms |= WS_ALR_TO;
        alarm_val=(millis()-rf_millis)/60000;
        alarm_cnt[WS_ALR_TO_IDX]++;
@@ -343,20 +343,19 @@ void updateScreen(bool refresh) {
     }
     break;     
     case WS_UI_STAT: {      
-      int vpos=0;
       uint32_t rtdur = RTC.now().unixtime()-rts;
-
-      Tft.drawString("UPT: ",0, vpos, 2, GREEN, BLACK, true); dispTimeout(millis()/1000, true, 64, vpos, 2); vpos+=FONT_Y*2;
-      Tft.drawString("RTT: ",0, vpos, 2, GREEN, BLACK, true); dispTimeout(rtdur, true, 64, vpos, 2); vpos+=FONT_Y*2;
-      sprintf(buf, "CNT: %d", (int)msgcnt); Tft.drawString(buf,0, vpos, 2, GREEN, BLACK, true); vpos+=FONT_Y*2;
-      sprintf(buf, "HSZ: %d", (int)mHist.getSz()); Tft.drawString(buf,0, vpos, 2, GREEN, BLACK, true); vpos+=FONT_Y*2;
-      sprintf(buf, "HP=%d TP=%d", (int)mHist._getHeadPtr(), (int)mHist._getTailPtr()); Tft.drawString(buf,0, vpos, 2, GREEN, BLACK, true); vpos+=FONT_Y*2;
+      line_init(GREEN, 2);
+      dispTimeout(millis()/1000, true, 64, line_getpos(), 2); line_print("UPT: ");
+      dispTimeout(rtdur, true, 64, line_getpos(), 2); line_print("RTT: ");
+      sprintf(buf, "CNT: %d", (int)msgcnt); line_print(buf);
+      sprintf(buf, "HSZ: %d", (int)mHist.getSz()); line_print(buf);
+      sprintf(buf, "HP=%d TP=%d", (int)mHist._getHeadPtr(), (int)mHist._getTailPtr()); line_print(buf);
       mHist.iterBegin();  
       while(mHist.movePrev());
-      sprintf(buf, "DUR: %02.2d:%02.2d", (int)mHist.getPrevMinsBefore()/60,(int)mHist.getPrevMinsBefore()%60); Tft.drawString(buf,0, vpos, 2, GREEN, BLACK, true); vpos+=FONT_Y*2;  
+      sprintf(buf, "DUR: %02.2d:%02.2d", (int)mHist.getPrevMinsBefore()/60,(int)mHist.getPrevMinsBefore()%60); line_print(buf);  
       for(int i=0; i<=WS_ALR_LAST_IDX; i++) {
-        sprintf(buf, "A%d: %d", i, (int)alarm_cnt[i]); Tft.drawString(buf,0, vpos, 2, GREEN, BLACK, true); vpos+=FONT_Y*2;
-      }       
+        sprintf(buf, "A%d: %d", i, (int)alarm_cnt[i]); line_print(buf);
+      }
     }
     break;
     case WS_UI_SET: {  
@@ -389,7 +388,6 @@ void dispTimeout(unsigned long ts, bool reset, int x, int y, int sz) {
   
   if(reset) p_days=-1;
    
-  //unsigned long ts=dt/1000;
   tmp[2]=ts%60; tmp[1]=(ts/60)%60; tmp[0]=(ts/3600)%24;
   uint8_t days=ts/3600/24;  
   if(days>0 && days!=p_days) {
@@ -487,14 +485,12 @@ void printHist(uint8_t sid) {
     Tft.drawString("NO DATA", 40,100, 6, RED, BLACK, false);
     return;
   }
-  uint8_t vpos=0;
+  line_init(GREEN, 2);
   do {
-    Tft.drawString(printTemp(buf, mHist.getPrev()->temp, 0),0,vpos, 1, GREEN, BLACK, false);
-    sprintf(buf, "-%d min", mHist.getPrevMinsBefore()); 
-    Tft.drawString(buf,100, vpos, 1, GREEN, BLACK, false);
-    vpos+=FONT_SPACE+2;
-  } while(mHist.movePrev() && vpos<230);
-  
+    line_printn(printTemp(buf, mHist.getPrev()->temp, 0));
+    sprintf(buf, " (%d min)", mHist.getPrevMinsBefore());
+    line_print(buf);
+    } while(mHist.movePrev() && line_getpos()<230);
 }
 
 void chartHist(uint8_t sid) { // this is not a correct time-chart...just a sequence of measurements  
@@ -583,12 +579,16 @@ void chartHist60(uint8_t sid)
   }
   maxt=mint=mHist.getPrev()->temp;  
   do {
-    uint8_t islot=mHist.getPrevMinsBefore()/DUR_MIN;
+    //uint8_t islot=mHist.getPrevMinsBefore()/DUR_MIN;
+    uint8_t islot0=mHist.getPrevMinsBefore()/DUR_MIN;
+    uint8_t islot1=(mHist.getPrevMinsBefore()+mHist.getPrev()->mins-1)/DUR_MIN;
     int16_t t = mHist.getPrev()->temp;    
-    if(islot>=0 && islot<DUR_24) {
-      cnt[islot]++;
-      acc[islot]+=t;
-    }    
+    for(int islot=islot0; islot<=islot1; islot++) {
+      if(islot>=0 && islot<DUR_24) {
+        cnt[islot]++;
+        acc[islot]+=t;
+      }    
+    }
     if(t>maxt) maxt=t;
     if(t<mint) mint=t;    
   } while(mHist.movePrev());
@@ -664,6 +664,30 @@ int16_t prepChart(int16_t *pmint, int16_t *pmaxt) {
   }
   
   return tdiff;
+}
+
+static uint16_t _lp_vpos=0;
+static int16_t _lp_hpos=0;
+static uint16_t _lp_color=0;
+static uint8_t _lp_sz=0;
+
+uint16_t line_getpos() { return _lp_vpos; }
+
+void line_init(uint16_t color, uint8_t sz) {
+  _lp_color=color;
+  _lp_sz=sz;
+  _lp_vpos=_lp_hpos=0;
+}
+
+void line_print(char* buf) {
+  //Tft.drawString(buf ,0, _lp_vpos, _lp_sz, _lp_color, BLACK, true);
+  line_printn(buf);
+  _lp_hpos=0;
+  _lp_vpos+=FONT_Y*_lp_sz;
+}
+
+void line_printn(char* buf) {
+  _lp_hpos = Tft.drawString(buf ,_lp_hpos, _lp_vpos, _lp_sz, _lp_color, BLACK, true);
 }
 
 /****************** HIST ****************/

@@ -15,7 +15,6 @@ void TempHistory::init() {
   head_ptr=0; tail_ptr=TH_HIST_SZ-1;
   acc={0, 0, 0};
   acc_prev_time=millis();
-  //for(uint8_t i=0;i<TH_HIST_SZ;i++) hist[i].temp=TH_NODATA;
 }
 
 void TempHistory::addAcc(int16_t temp) {
@@ -43,32 +42,17 @@ void TempHistory::add(uint8_t sid, uint8_t mins, int16_t temp) {
 
 int16_t TempHistory::getDiff(int16_t val, uint8_t sid) {
   uint8_t lst=getPrev(head_ptr);      
-  //if(hist[lst].temp==TH_NODATA) return 0;
   if(lst==tail_ptr) return 0;
   return val-hist[lst].temp;
 }
 
-uint8_t TempHistory::getSz() {
-  /*
-  uint8_t cnt=0;
-  iterBegin();  
-  while(movePrev()) cnt++;
-  return cnt;
-  */
-  return head_ptr + (TH_HIST_SZ-1-tail_ptr);
-}
-
 void TempHistory::iterBegin() { 
   iter_ptr = head_ptr; 
-  //iter_firstmov=1; 
   iter_mbefore=interval(acc_prev_time)/60000L; // time lapsed from latest storage
 }
 
 boolean TempHistory::movePrev() {
-  //if(iter_ptr==head_ptr && !iter_firstmov) return false; 
-  //iter_firstmov=0; 
   iter_ptr=getPrev(iter_ptr);   
-  //if(hist[iter_ptr].temp==TH_NODATA) return false;
   if(iter_ptr == tail_ptr) return false;
   iter_mbefore+=hist[iter_ptr].mins; // points to the moment iterated average started to accumulate 
   return true;
