@@ -14,6 +14,8 @@ TempHistory::TempHistory() {
 void TempHistory::init() {
   head_ptr=0; tail_ptr=TH_HIST_SZ-1;
   acc={0, 0, 0};
+  since_h_acc=0;
+  last_h_acc_ptr=0;
   acc_prev_time=millis();
 }
 
@@ -37,7 +39,46 @@ void TempHistory::add(uint8_t sid, uint8_t mins, int16_t temp) {
   head_ptr = (head_ptr+1)%TH_HIST_SZ; // next (and the oldest reading)
   // hour accum here...
   // compress old records to hours...
-  // strategy - find oldest < 1 hour
+  since_h_acc+=mins;
+  if(since_h_acc>120) { // 2 hours
+    int32_t acc=0;
+    uint8_t cnt=0;
+    uint8_t iptr=last_h_acc_ptr;
+    uint16_t mins=0;
+    // calculate hour average
+    do { 
+      mins+=hist[iptr].mins;
+      acc+=hist[iptr].temp;
+      cnt++;
+      iptr = getNext(iptr);
+    } while(iptr!=head_ptr && mins<60);
+    // store hour average
+    hist[last_h_acc_ptr].temp=acc/cnt;
+    hist[last_h_acc_ptr].mins=mins;
+    
+    last_h_acc_ptr=getNext(last_h_acc_ptr);
+    
+    // move items down... 
+    uint8_t tptr=last_h_acc_ptr;
+    mins=0;
+    while(iptr!=head_ptr) { 
+      mins+=hist[iptr].mins;
+      hist[tptr]=hist[iptr];
+      iptr = getNext(iptr);
+      tptr = getNext(tptr);
+    }    
+    head_ptr=tptr;
+    
+    /*
+    last_h_acc_ptr=iptr; // WRONG, should be shifted down
+    mins=0;
+    while(iptr!=head_ptr) { 
+      mins+=hist[iptr].mins;
+      iptr = getNext(iptr);
+    }
+    */
+    since_h_acc=mins;    
+  }
 }
 
 int16_t TempHistory::getDiff(int16_t val, uint8_t sid) {

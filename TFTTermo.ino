@@ -140,6 +140,7 @@ uint8_t ledon=0;
 uint8_t bt1cnt=0, bt2cnt=0;
 uint8_t uilev=0;
 uint8_t editmode=0;
+uint8_t chrsl=0;
 const int WS_BL_TO=20000;
 
 long dif=0;
@@ -300,8 +301,14 @@ void processLongClick() {
 }
 
 void processShortRightClick() {
-  if(!editmode) return;
+  if(uilev==WS_UI_CHART) {
+    if(++chrsl>3) chrsl=0;
+    Tft.fillScreen();
+    chartHist(1, chrsl);
+    return;
+  }
   if(uilev!=WS_UI_SET) return;
+  if(!editmode) return;
   timeUp(editmode-1, WS_CHAR_TIME_SET_SZ);
   Tft.drawRectangle(FONT_SPACE*WS_CHAR_TIME_SET_SZ*(editmode<3?editmode-1:editmode), 40, FONT_SPACE*WS_CHAR_TIME_SET_SZ, FONT_Y*WS_CHAR_TIME_SET_SZ, WHITE);
 }       
@@ -335,7 +342,8 @@ void updateScreen(bool refresh) {
     break;
     
     case WS_UI_CHART: {
-      chartHist(1);
+      chrsl=0;
+      chartHist(1, chrsl);
     }
     break; 
     case WS_UI_CHART60: {
@@ -350,6 +358,7 @@ void updateScreen(bool refresh) {
       sprintf(buf, "CNT: %d", (int)msgcnt); line_print(buf);
       sprintf(buf, "HSZ: %d", (int)mHist.getSz()); line_print(buf);
       sprintf(buf, "HP=%d TP=%d", (int)mHist._getHeadPtr(), (int)mHist._getTailPtr()); line_print(buf);
+      sprintf(buf, "SHA=%d LHAP=%d", (int)mHist._getSinceHAcc(), (int)mHist._getLastHAccPtr()); line_print(buf);
       mHist.iterBegin();  
       while(mHist.movePrev());
       sprintf(buf, "DUR: %02.2d:%02.2d", (int)mHist.getPrevMinsBefore()/60,(int)mHist.getPrevMinsBefore()%60); line_print(buf);  
@@ -369,15 +378,13 @@ void updateScreen(bool refresh) {
 void updateScreenTime(bool reset) {
   DateTime now = RTC.now();
   if(uilev==WS_UI_MAIN) {
-    //printDate(reset, WS_CHAR_TIME_SZ);   
-    printTime(&now, reset, 0, 40, WS_CHAR_TIME_SZ, true);   
+    printTime(&now, reset, 0, 40, WS_CHAR_TIME_SZ, true, false);   
     dispTimeout((millis()-last_millis_temp)/1000, reset, 0, 160, 2);
   } else if(uilev==WS_UI_SET) {
       if(editmode) {
         ;
       }
-      //else printDate(reset, WS_CHAR_TIME_SET_SZ);   
-      else printTime(&now, reset, 0, 40, WS_CHAR_TIME_SET_SZ, false);   
+      else printTime(&now, reset, 0, 40, WS_CHAR_TIME_SET_SZ, false, false);   
   }
 }
 
@@ -418,16 +425,16 @@ char *printTemp(char *buf, int16_t disptemp, int8_t showg) {
 static byte p_date[3]={-1,-1,-1};
 static byte p_time[3]={-1,-1,-1};
 
-void printTime(DateTime *pDT, bool reset, int x, int y, int sz, bool blinkd){
+void printTime(DateTime *pDT, bool reset, int x, int y, int sz, bool blinkd, bool printdate){
   byte tmp[3];  
   char sbuf[8];  
   tmp[0]=pDT->hour(); tmp[1]=pDT->minute(); tmp[2]=pDT->second();
   disp_dig(reset, 2, 2, tmp, p_time, x, y, sz, YELLOW, (!blinkd || p_time[2]%2) ? ':' : ' ', tmp[2]!=p_time[2]);
   p_time[2]=tmp[2];
-  /*
-  tmp[0]=now.day(); tmp[1]=now.month(); tmp[2]=now.year()-2000;
-  disp_dig(reset, 3, 2, tmp, p_date, 0, 0, 2, RED, '/', false);
-  */
+  if(printdate) {
+    tmp[0]=pDT->day(); tmp[1]=pDT->month(); tmp[2]=pDT->year()-2000;
+    disp_dig(reset, 3, 2, tmp, p_date, x+6*sz*FONT_SPACE, y, sz, YELLOW, '/', false);
+  }
 }
 
 void timeUp(int dig, int sz) {
@@ -493,7 +500,12 @@ void printHist(uint8_t sid) {
     } while(mHist.movePrev() && line_getpos()<230);
 }
 
-void chartHist(uint8_t sid) { // this is not a correct time-chart...just a sequence of measurements  
+void chartHist(uint8_t sid, uint8_t scale) {  
+  const uint8_t chart_xstep_nom=2; 
+  const uint8_t chart_xstep_denoms[]={16, 32, 80, 112};
+  uint8_t chart_xstep_denom = chart_xstep_denoms[scale];
+  //const int chart_xstep_denom=15, chart_xstep_nom=2; 
+  
   int16_t mint, maxt;
   mHist.iterBegin();  
   if(!mHist.movePrev()) {
@@ -513,15 +525,14 @@ void chartHist(uint8_t sid) { // this is not a correct time-chart...just a seque
   int16_t tdiff=prepChart(&mint, &maxt);
   
   int16_t y0, x0, xr;  
-  const int chart_xstep_denom=15, chart_xstep_nom=2; 
   xr=(int32_t)mbefore*chart_xstep_nom/chart_xstep_denom;
   if(xr>=chart_width) xr=chart_width-1;
   
   Tft.drawStraightDashedLine(LCD_VERTICAL, xr, chart_top, chart_height,BLUE,BLACK, 0x0f); // now line
   DateTime now = RTC.now();
-  printTime(&now, true, xr, 224, 2, false);   
+  //printTime(&now, true, xr, 224, 2, false, false);   
 
-  if(xr>36) { // midnight
+  if(xr>36) { // draw midnight line
     DateTime start=DateTime(now.year(), now.month(), now.day());
     uint16_t mid = (now.unixtime() - start.unixtime())/60;
     if(mid<mbefore) {
@@ -538,11 +549,6 @@ void chartHist(uint8_t sid) { // this is not a correct time-chart...just a seque
     int y1=(int32_t)(maxt-mHist.getPrev()->temp)*chart_height/tdiff;
     int x1=xr-(int32_t)mHist.getPrevMinsBefore()*chart_xstep_nom/chart_xstep_denom;
     if(cnt)  {
-      /*
-      if(cnt<3) {
-        sprintf(buf, "%d -> %d", x1, x0); Tft.drawString(buf, 140, FONT_Y*2*cnt, 2, RED, BLACK, false);
-      }
-      */
      if(x1>0 && x0>0) 
        Tft.drawLineThick(x1,chart_top+y1,x0,chart_top+y0, WHITE, 3);
     }
@@ -553,7 +559,7 @@ void chartHist(uint8_t sid) { // this is not a correct time-chart...just a seque
   
  if(xr>36) {
    DateTime start=DateTime(now.unixtime()-(uint32_t)mHist.getPrevMinsBefore()*60);
-   printTime(&start, true, 0, 224, 2, false);   
+   printTime(&start, true, 0, 224, 2, false, true);   
  }  
 }
 
@@ -579,7 +585,6 @@ void chartHist60(uint8_t sid)
   }
   maxt=mint=mHist.getPrev()->temp;  
   do {
-    //uint8_t islot=mHist.getPrevMinsBefore()/DUR_MIN;
     uint8_t islot0=mHist.getPrevMinsBefore()/DUR_MIN;
     uint8_t islot1=(mHist.getPrevMinsBefore()+mHist.getPrev()->mins-1)/DUR_MIN;
     int16_t t = mHist.getPrev()->temp;    
@@ -600,8 +605,6 @@ void chartHist60(uint8_t sid)
   int y_z=(int32_t)(maxt-0)*chart_height/tdiff; // from top
   int x=0; 
 
-  //int vpos = FONT_Y*2;
-  
   for(int i=0; i<DUR_24; i++) {
     // should be up from zerolinr if positive, down if negative
     int islot=DUR_24-1-i; // oldest at left
@@ -616,22 +619,13 @@ void chartHist60(uint8_t sid)
         if(mint>0) { y0=chart_height; h=(int32_t)(val-mint)*chart_height/tdiff;} else { y0=y_z; h=(int32_t)(val)*chart_height/tdiff; }
         y0-=h;
       }
-
-/*      
-      sprintf(buf, "* %d %d ", islot, cnt[islot]);
-      Tft.drawString(buf, 0, vpos, 2, GREEN, BLACK, false);
-      Tft.drawString(printTemp(buf, val, 0), 60, vpos, 2, GREEN, BLACK, false);
-      sprintf(buf, "%d %d ", y0, h);
-      Tft.drawString(buf, 124, vpos, 2, GREEN, BLACK, false);
-      vpos+=FONT_Y*2;  
-*/
       Tft.fillRectangle(x+1, chart_top+y0, xstep-2, h, WHITE);
     }
     x+=xstep;
   }
   
   DateTime now = RTC.now();
-  printTime(&now, true, chart_width, 224, 2, false);   
+  printTime(&now, true, chart_width, 224, 2, false, false);   
 
 }
 
@@ -680,7 +674,6 @@ void line_init(uint16_t color, uint8_t sz) {
 }
 
 void line_print(char* buf) {
-  //Tft.drawString(buf ,0, _lp_vpos, _lp_sz, _lp_color, BLACK, true);
   line_printn(buf);
   _lp_hpos=0;
   _lp_vpos+=FONT_Y*_lp_sz;
