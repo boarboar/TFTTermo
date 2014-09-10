@@ -1,26 +1,34 @@
 
 // effective storage is TH_HIST_SZ-1
-#define TH_HIST_SZ  96 
-//#define TH_HIST_SZ  32
+#define TH_HIST_SZ  100 
+//#define TH_HIST_SZ  96
 #define TH_ACC_TIME  15 //mins
+#define TH_HIST_DV_T  5
+#define TH_HIST_DV_V  2
+#define TH_HIST_VAL_T 0
+#define TH_HIST_VAL_V 1
 
 class TempHistory {
 public:
-  struct wt_msg_hist {
+  class wt_msg_hist {
+    public:
+    int16_t getVal(uint8_t type) { return type==TH_HIST_VAL_T ? temp*TH_HIST_DV_T : vcc*TH_HIST_DV_V; }
     uint8_t sid;  // src
     uint8_t mins; // mins since previous put
-    int16_t temp;
+    int8_t temp;    
+    uint8_t vcc;    
   };
   struct wt_msg_acc {
     uint8_t cnt;
     uint8_t mins; // mins since previous put
     int32_t temp;
+    int32_t vcc;
   };
 
     TempHistory();
     void init();
-    void addAcc(int16_t temp);
-    void add(uint8_t sid, uint8_t mins, int16_t temp);
+    void addAcc(int16_t temp, int16_t vcc);
+    void add(uint8_t sid, uint8_t mins, int16_t temp, int16_t vcc);
     int16_t getDiff(int16_t val, uint8_t sid);
     uint8_t getSz() { return head_ptr + (TH_HIST_SZ-1-tail_ptr); }
     unsigned long getLastAccTime() { return acc_prev_time; }
@@ -39,7 +47,6 @@ public:
     
     static unsigned long interval(unsigned long prev);
 protected:
-    //uint8_t size;
     wt_msg_hist hist[TH_HIST_SZ];
     uint8_t head_ptr; // NEXT record to fill
     uint8_t tail_ptr; // record before oldest one 
