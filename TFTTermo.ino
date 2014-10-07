@@ -124,6 +124,8 @@ const int chart_width=240;
 const int chart_height=204;
 const int chart_top=19;
 
+#define WS_CHART_NLEV 4
+
 #define WS_BUT_NONE  0x00
 #define WS_BUT_PRES  0x01
 
@@ -134,7 +136,7 @@ uint8_t ledon=0;
 uint8_t bt1cnt=0, bt2cnt=0;
 uint8_t uilev=0;
 uint8_t editmode=0;
-uint8_t chrsl=0;
+uint8_t pageidx=0;
 uint8_t chrt=TH_HIST_VAL_T;
 const int WS_BL_TO=20000;
 
@@ -300,9 +302,14 @@ void processLongClick() {
 
 void processShortRightClick() {
   if(uilev==WS_UI_CHART || uilev==WS_UI_CHART_VCC) {
-    if(++chrsl>2) chrsl=0;
+    if(++pageidx>=WS_CHART_NLEV) pageidx=0;
     Tft.fillScreen();
-    chartHist(1, chrsl, chrt);
+    chartHist(1, pageidx, chrt);
+    return;
+  }
+  if(uilev==WS_UI_HIST) {
+    Tft.fillScreen();
+    pageidx=printHist(1, pageidx);
     return;
   }
   if(uilev!=WS_UI_SET) return;
@@ -333,14 +340,14 @@ void updateScreen(bool refresh) {
     break;
     
     case WS_UI_HIST: {
-      printHist(1);
+      pageidx=printHist(1, 0);
     }
     break;
     
     case WS_UI_CHART: {
-      chrsl=0;
+      pageidx=0;
       chrt=TH_HIST_VAL_T;
-      chartHist(1, chrsl, chrt);
+      chartHist(1, pageidx, chrt);
     }
     break; 
     case WS_UI_CHART60: {
@@ -348,9 +355,9 @@ void updateScreen(bool refresh) {
     }
     break;
     case WS_UI_CHART_VCC: {
-      chrsl=0;
+      pageidx=0;
       chrt=TH_HIST_VAL_V;
-      chartHist(1, chrsl, chrt);
+      chartHist(1, pageidx, chrt);
     }
     break;     
     case WS_UI_STAT: {      
@@ -361,7 +368,8 @@ void updateScreen(bool refresh) {
       sprintf(buf, "CNT: %d", (int)msgcnt); line_print(buf);
       sprintf(buf, "HSZ: %d", (int)mHist.getSz()); line_print(buf);
       sprintf(buf, "HP=%d TP=%d", (int)mHist._getHeadPtr(), (int)mHist._getTailPtr()); line_print(buf);
-      sprintf(buf, "SHA=%d LHAP=%d", (int)mHist._getSinceHAcc(), (int)mHist._getLastHAccPtr()); line_print(buf);
+      sprintf(buf, "SHA1=%d LHAP1=%d", (int)mHist._getSince1HAcc(), (int)mHist._getLast1HAccPtr()); line_print(buf);
+      sprintf(buf, "SHA3=%d LHAP3=%d", (int)mHist._getSince3HAcc(), (int)mHist._getLast3HAccPtr()); line_print(buf);
       mHist.iterBegin();  
       while(mHist.movePrev());
       sprintf(buf, "DUR: %02.2d:%02.2d", (int)mHist.getPrevMinsBefore()/60,(int)mHist.getPrevMinsBefore()%60); line_print(buf);  
@@ -436,7 +444,7 @@ static byte p_time[3]={-1,-1,-1};
 
 void printTime(DateTime *pDT, bool reset, int x, int y, int sz, bool blinkd, bool printdate){
   byte tmp[3];  
-  char sbuf[8];  
+  //char sbuf[8];  
   tmp[0]=pDT->hour(); tmp[1]=pDT->minute(); tmp[2]=pDT->second();
   disp_dig(reset, 2, 2, tmp, p_time, x, y, sz, YELLOW, (!blinkd || p_time[2]%2) ? ':' : ' ', tmp[2]!=p_time[2]);
   p_time[2]=tmp[2];
@@ -466,7 +474,7 @@ void timeStore() {
 }
 
 void disp_dig(byte redraw, byte ngrp, byte nsym, byte *data, byte *p_data, int x, int y, int sz, int color, char delim, byte drdrm) {
-  char sbuf[8];
+  //char sbuf[8];
   int posX=x;
   for(byte igrp=0; igrp<ngrp; igrp++) {  
     if(igrp) {
@@ -495,25 +503,40 @@ void dispStat(char *pbuf) {
 
 /****************** REPORTS ****************/
 
-void printHist(uint8_t sid) {    
+uint8_t printHist(uint8_t sid, uint8_t idx) {    
   mHist.iterBegin();  
   if(!mHist.movePrev()) {
     Tft.drawString("NO DATA", 40,100, 6, RED, BLACK, false);
-    return;
+    return 0;
   }
+  uint8_t i=0;
+  while(i<idx && mHist.movePrev()) i++;
+  if(i<idx) { // wraparound
+    mHist.iterBegin();
+    mHist.movePrev();
+    i=0;
+  }
+  
   line_init(GREEN, 2);
   do {
+    sprintf(buf, "%4d ", (int)i);
+    line_printn(buf);
     int16_t vcc=mHist.getPrev()->getVal(TH_HIST_VAL_V);    
     line_printn(printTemp(buf, mHist.getPrev()->getVal(TH_HIST_VAL_T), 0));
     line_printn(printVcc(vcc));
-    sprintf(buf, " (%d min)", mHist.getPrevMinsBefore());
+    //sprintf(buf, " (%d min)", mHist.getPrevMinsBefore());
+    sprintf(buf, " (%d min)", mHist.getPrev()->mins);
     line_print(buf);
+    i++;
     } while(mHist.movePrev() && line_getpos()<230);
+  return i;  
 }
 
 void chartHist(uint8_t sid, uint8_t scale, uint8_t type) {  
-  const uint8_t chart_xstep_nom=2; 
-  const uint8_t chart_xstep_denoms[]={16, 32, 80, 112};
+  //const uint8_t chart_xstep_nom=2; 
+  const uint8_t chart_xstep_nom=1; 
+  //const uint8_t chart_xstep_denoms[]={16, 32, 80, 112};
+  const uint8_t chart_xstep_denoms[WS_CHART_NLEV]={7, 21, 49, 217};
   uint8_t chart_xstep_denom = chart_xstep_denoms[scale];
   
   int16_t mint, maxt;
@@ -579,12 +602,12 @@ void chartHist60(uint8_t sid)
 {  
   const int DUR_24=24;
   const int DUR_MIN=60;
-  int16_t alldur=DUR_24*DUR_MIN;
+  //int16_t alldur=DUR_24*DUR_MIN;
   int32_t acc[DUR_24];
   uint8_t cnt[DUR_24];
   
   int16_t mint, maxt;
-  uint16_t mbefore;
+  //uint16_t mbefore;
  
   mHist.iterBegin();  
   if(!mHist.movePrev()) {
@@ -610,12 +633,16 @@ void chartHist60(uint8_t sid)
     if(t<mint) mint=t;    
   } while(mHist.movePrev());
 
-  sprintf(buf, "%d mins", (int)mbefore); Tft.drawString(buf, 160, 0, 2, GREEN, BLACK, false); 
+  //sprintf(buf, "%d mins", (int)mbefore); Tft.drawString(buf, 160, 0, 2, GREEN, BLACK, false); 
   int16_t tdiff=prepChart(&mint, &maxt, TH_HIST_VAL_T);
  
   int xstep = chart_width/DUR_24;
   int y_z=(int32_t)(maxt-0)*chart_height/tdiff; // from top
   int x=0; 
+
+  DateTime now = RTC.now();  
+  DateTime start=DateTime(now.unixtime()-1440);
+  printTime(&start, true, 0, 224, 2, false, false);   
 
   for(int i=0; i<DUR_24; i++) {
     // should be up from zerolinr if positive, down if negative
@@ -636,7 +663,6 @@ void chartHist60(uint8_t sid)
     x+=xstep;
   }
   
-  DateTime now = RTC.now();
   printTime(&now, true, chart_width, 224, 2, false, false);   
 
 }

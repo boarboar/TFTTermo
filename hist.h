@@ -1,12 +1,15 @@
 
 // effective storage is TH_HIST_SZ-1
-#define TH_HIST_SZ  100 
+//#define TH_HIST_SZ  100 
 //#define TH_HIST_SZ  96
+#define TH_HIST_SZ  254 
 #define TH_ACC_TIME  15 //mins
 #define TH_HIST_DV_T  5
 #define TH_HIST_DV_V  2
 #define TH_HIST_VAL_T 0
 #define TH_HIST_VAL_V 1
+
+// uint16_t max: 65535 mins = 1092 hours = 45 days
 
 class TempHistory {
 public:
@@ -42,16 +45,22 @@ public:
         
     uint8_t _getHeadPtr() { return head_ptr; }
     uint8_t _getTailPtr() { return tail_ptr; }
-    uint8_t _getSinceHAcc() { return since_h_acc; }
-    uint8_t _getLastHAccPtr() { return last_h_acc_ptr; }
+    uint8_t _getSince1HAcc() { return since_1h_acc; }
+    uint8_t _getLast1HAccPtr() { return last_1h_acc_ptr; }
+    uint8_t _getSince3HAcc() { return since_3h_acc; }
+    uint8_t _getLast3HAccPtr() { return last_3h_acc_ptr; }
     
     static unsigned long interval(unsigned long prev);
 protected:
+    uint16_t compress(uint8_t level);
+
     wt_msg_hist hist[TH_HIST_SZ];
     uint8_t head_ptr; // NEXT record to fill
     uint8_t tail_ptr; // record before oldest one 
-    uint8_t since_h_acc;
-    uint8_t last_h_acc_ptr;
+    uint16_t since_1h_acc; // mins passed after last 1-hour compression
+    uint8_t last_1h_acc_ptr; // ptr to the last non-accumulated 1-hour item
+    uint16_t since_3h_acc; // mins passed after last 3-hour compression
+    uint8_t last_3h_acc_ptr; // ptr to the last non-accumulated 3-hour item    
     wt_msg_acc acc;
     unsigned long acc_prev_time;
     uint8_t iter_ptr;
