@@ -92,11 +92,6 @@
 #define LCD_HORIZONTAL 0
 #define LCD_VERTICAL 1
 
-//#define TS_MINX 116*2
-//#define TS_MAXX 890*2
-//#define TS_MINY 83*2
-//#define TS_MAXY 913*2
-
 #ifndef INT8U
 #define INT8U unsigned char
 #endif
@@ -105,51 +100,50 @@
 #endif
 
 #define FONT_SPACE 6
-#define FONT_X 8
+//#define FONT_X 8
 #define FONT_Y 8
 
-extern INT8U simpleFont[][8];
+extern INT8U simpleFont[][6];
 
 class TFT
 {
 public:
 	void TFTinit (INT8U cs=P2_0, INT8U dc=P2_1, INT8U bl=P2_2);
-	void setBl(bool on); 
-	void setCol(INT16U StartCol,INT16U EndCol);
-	void setPage(INT16U StartPage,INT16U EndPage);
-	void setXY(INT16U poX, INT16U poY);
-    void setPixel(INT16U poX, INT16U poY,INT16U color);
+	void setBl(bool on) {digitalWrite(_bl, on ? HIGH : LOW);}
+	//void setCol(INT16U StartCol,INT16U EndCol);
+	//void setPage(INT16U StartPage,INT16U EndPage);
+	//void setXY(INT16U poX, INT16U poY);
+        void setWindow(INT16U StartCol, INT16U EndCol, INT16U StartPage,INT16U EndPage);
+        void setPixel(INT16U poX, INT16U poY,INT16U color);
 	void sendCMD(INT8U index);
-	void WRITE_Package(INT16U *data,INT8U howmany);
+	//void WRITE_Package(INT16U *data,INT8U howmany);
 	void WRITE_DATA(INT8U data);
+        void Write_Bulk(const INT8U *data, INT8U count);
 	void sendData(INT16U data);
-	INT8U Read_Register(INT8U Addr,INT8U xParameter);
+	//INT8U Read_Register(INT8U Addr,INT8U xParameter);
 	void fillScreen(INT16U XL,INT16U XR,INT16U YU,INT16U YD,INT16U color);
-	void fillScreen(void);
-	INT8U readID(void);
-	
+        void fillScreen(void);
+	//INT8U readID(void);
+
+	void setOrientation(int value);
+
 	void drawChar(INT8U ascii,INT16U poX, INT16U poY,INT16U size, INT16U fgcolor, INT16U bgcolor=0, bool opaq=false);
         INT16U drawString(const char *string,INT16U poX, INT16U poY,INT16U size,INT16U fgcolor, INT16U bgcolor=0, bool opaq=false);
-	void fillRectangle(INT16U poX, INT16U poY, INT16U length, INT16U width, INT16U color);
+	void fillRectangle(INT16U poX, INT16U poY, INT16U length, INT16U width, INT16U color) { fillScreen(poX, poX+length, poY, poY+width, color); }
 	
 	void drawLine(INT16U x0,INT16U y0,INT16U x1,INT16U y1,INT16U color);
         void drawLineThick(INT16U x0,INT16U y0,INT16U x1,INT16U y1,INT16U color,INT8U th);
-        void drawVerticalLine(INT16U poX, INT16U poY,INT16U length,INT16U color);
-        void drawHorizontalLine(INT16U poX, INT16U poY,INT16U length,INT16U color);
+        void drawVerticalLine(INT16U poX, INT16U poY,INT16U length,INT16U color) {fillScreen(poX,poX,poY,poY+length,color);}  
+        void drawHorizontalLine(INT16U poX, INT16U poY,INT16U length,INT16U color) {fillScreen(poX,poX+length,poY,poY,color);}   
         void drawStraightDashedLine(INT8U dir, INT16U poX, INT16U poY, INT16U length, INT16U color, INT16U bkolor, INT8U mask);
 
-    void drawRectangle(INT16U poX, INT16U poY, INT16U length,INT16U width,INT16U color);
+        void drawRectangle(INT16U poX, INT16U poY, INT16U length,INT16U width,INT16U color);
 	
-	//void drawCircle(int poX, int poY, int r,INT16U color);
-    //void fillCircle(int poX, int poY, int r,INT16U color);
-	
-	//void drawTraingle(int poX1, int poY1, int poX2, int poY2, int poX3, int poY3, INT16U color);
-    INT8U drawNumber(long long_num,INT16U poX, INT16U poY,INT16U size,INT16U fgcolor);
-    //INT8U drawFloat(float floatNumber,INT8U decimal,INT16U poX, INT16U poY,INT16U size,INT16U fgcolor);
-    //INT8U drawFloat(float floatNumber,INT16U poX, INT16U poY,INT16U size,INT16U fgcolor);
-
-	void setOrientation(int value);
-	
+        INT16U  getMinX() { return 0; }
+        INT16U  getMinY() { return 0; }
+        INT16U  getMaxX() { return _flags&LCD_SWITCH_XY ? MAX_Y : MAX_X; }
+        INT16U  getMaxY() { return _flags&LCD_SWITCH_XY ? MAX_X : MAX_Y; }
+        	
 protected:
 	INT8U _flags;	
 	INT8U _cs, _dc, _bl;	

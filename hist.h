@@ -30,7 +30,7 @@ public:
 
     TempHistory();
     void init();
-    void addAcc(int16_t temp, int16_t vcc);
+    boolean addAcc(int16_t temp, int16_t vcc);
     void add(uint8_t sid, uint8_t mins, int16_t temp, int16_t vcc);
     int16_t getDiff(int16_t val, uint8_t sid);
     uint8_t getSz() { return head_ptr + (TH_HIST_SZ-1-tail_ptr); }

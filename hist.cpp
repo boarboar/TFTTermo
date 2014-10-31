@@ -21,7 +21,7 @@ void TempHistory::init() {
   acc_prev_time=millis();
 }
 
-void TempHistory::addAcc(int16_t temp, int16_t vcc) {
+boolean TempHistory::addAcc(int16_t temp, int16_t vcc) {
   acc.cnt++;
   acc.temp+=temp;
   acc.vcc+=vcc;
@@ -32,7 +32,8 @@ void TempHistory::addAcc(int16_t temp, int16_t vcc) {
     acc.temp=0;
     acc.vcc=0;
     acc.cnt=0;
-  }
+    return true;
+  } else return false;
 }
 
 void TempHistory::add(uint8_t sid, uint8_t mins, int16_t temp, int16_t vcc) {
