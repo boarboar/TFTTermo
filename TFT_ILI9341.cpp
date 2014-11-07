@@ -28,18 +28,16 @@ DONE
 3. fillScreen - for inc loop -> while dec lopp - OK
 4. fillScreen() - just call generic fillscreen(0,0,max,max,0); - OK
 5. straight lines - fill screen - OK
-
-TOTEST
-1. drawThickLine - loops replaced with drawlines - ROLLBACK - TEST AGAIN AND COMPARE
+5. dashedLine for inc loops -> while dec loops - OK
 2. setCol(poX0,poX0);setPage(poY0,poY0); - as one sendData with 4 bytes transfer - OK
 3. init - use bulk send - OK
+
+TOTEST
+1. drawThickLine - loops replaced with drawlines - FIXED - TEST AGAIN
 4. drwaChar - opaq optimization (?) - NO, much slower
-5. dashedLine for inc loops -> while dec loops
 
 TODO
 
-2. drawChar - optimize (to join filled rects) + opaque
-4. for inc loops -> while dec loops
 6. dash line - optimize (rewrite like fullScreen)
 7. draw lines - save on local vars
 
@@ -75,6 +73,7 @@ void TFT::sendData(INT16U data)
     TFT_CS_HIGH;
 }
 
+/*
 void TFT::Write_Bulk(const INT8U *data, INT8U count)
 {
     TFT_DC_HIGH;
@@ -83,6 +82,16 @@ void TFT::Write_Bulk(const INT8U *data, INT8U count)
     TFT_CS_HIGH;
 }
 
+*/
+
+void TFT::WriteCmdSeq(const INT8U *data)
+{
+  while(*data) {
+    INT8U data_len1=(*data++);
+    sendCMD(*data++);
+    while(--data_len1) WRITE_DATA(*data++);    
+  }
+}
 
 /*
 void TFT::WRITE_Package(INT16U *data, INT8U howmany)
@@ -174,132 +183,34 @@ void TFT::TFTinit (INT8U cs, INT8U dc, INT8U bl)
     sendCMD(0x01);
     delay(200);
 
-    sendCMD(0xCF);
-    WRITE_DATA(0x00);
-    WRITE_DATA(0x8B);
-    WRITE_DATA(0X30);
-
-    sendCMD(0xED);
-    WRITE_DATA(0x67);
-    WRITE_DATA(0x03);
-    WRITE_DATA(0X12);
-    WRITE_DATA(0X81);
-
-    sendCMD(0xE8);
-    WRITE_DATA(0x85);
-    WRITE_DATA(0x10);
-    WRITE_DATA(0x7A);
- 
-    sendCMD(0xCB);
-    /*
-    WRITE_DATA(0x39);
-    WRITE_DATA(0x2C);
-    WRITE_DATA(0x00);
-    WRITE_DATA(0x34);
-    WRITE_DATA(0x02);
-    */
-    const INT8U t3[5]={0x39,0x2C,0x00,0x34,0x02};
-    Write_Bulk(t3, 5);
-
-
-    sendCMD(0xF7);
-    WRITE_DATA(0x20);
-
-    sendCMD(0xEA);
-    WRITE_DATA(0x00);
-    WRITE_DATA(0x00);
-
-    sendCMD(0xC0);                                                      /* Power control                */
-    WRITE_DATA(0x1B);                                                   /* VRH[5:0]                     */
-
-    sendCMD(0xC1);                                                      /* Power control                */
-    WRITE_DATA(0x10);                                                   /* SAP[2:0];BT[3:0]             */
-
-    sendCMD(0xC5);                                                      /* VCM control                  */
-    WRITE_DATA(0x3F);
-    WRITE_DATA(0x3C);
-
-    sendCMD(0xC7);                                                      /* VCM control2                 */
-    WRITE_DATA(0XB7);
-
-    sendCMD(0x36);                                                      /* Memory Access Control        */
-    WRITE_DATA(0x08);  // portrait
-
-    sendCMD(0x3A);
-    WRITE_DATA(0x55);
-
-    sendCMD(0xB1);
-    WRITE_DATA(0x00);
-    WRITE_DATA(0x1B);
-
-    sendCMD(0xB6);                                                      /* Display Function Control     */
-    WRITE_DATA(0x0A);
-    WRITE_DATA(0xA2);
-
-    sendCMD(0xF2);                                                      /* 3Gamma Function Disable      */
-    WRITE_DATA(0x00);
-
-    sendCMD(0x26);                                                      /* Gamma curve selected         */
-    WRITE_DATA(0x01);
-
-    sendCMD(0xE0);                                                      /* Set Gamma                    */
-    // replace with Bulk write ???
-    /*
-    WRITE_DATA(0x0F);
-    WRITE_DATA(0x2A);
-    WRITE_DATA(0x28);
-    WRITE_DATA(0x08);
-    WRITE_DATA(0x0E);
-    WRITE_DATA(0x08);
-    WRITE_DATA(0x54);
-    WRITE_DATA(0XA9);
-    WRITE_DATA(0x43);
-    WRITE_DATA(0x0A);
-    WRITE_DATA(0x0F);
-    WRITE_DATA(0x00);
-    WRITE_DATA(0x00);
-    WRITE_DATA(0x00);
-    WRITE_DATA(0x00);
-*/
-    const INT8U g0[15]={0x0F,0x2A,0x28,0x08,0x0E,0x08,0x54,0xA9,0x43,0x0A,0x0F,0x00,0x00,0x00,0x00};
-    Write_Bulk(g0, 15);
-
-    sendCMD(0XE1);                                                      /* Set Gamma                    */
+    const INT8U seq[]={
+      4, 0xCF,    0x00,0x8B,0x30,
+      5, 0xED,    0x67,0x03,0x12,0x81,
+      4, 0xE8,    0x85,0x10,0x7A,
+      6, 0xCB,    0x39,0x2C,0x00,0x34,0x02,
+      2, 0xF7,    0x20,
+      3, 0xEA,    0x00, 0x00,
+      2, 0xC0,    0x1B, /* Power control     VRH[5:0]              */
+      2, 0xC1,    0x10, /* Power control    SAP[2:0];BT[3:0]            */
+      3, 0xC5,    0x3F, 0x3C,  /* VCM control                  */
+      2, 0xC7,    0xB7,       /* VCM control2                 */
+      2, 0x36,    0x08,        /* Memory Access Control   portrait     */
+      2, 0x3A,    0x55,
+      3, 0xB1,    0x00, 0x1B,
+      3, 0xB6,    0x0A, 0xA2,    /* Display Function Control     */
+      2, 0xF2,    0x00,          /* 3Gamma Function Disable      */
+      2, 0x26,    0x01,          /* Gamma curve selected         */
+      16, 0xE0,   0x0F,0x2A,0x28,0x08,0x0E,0x08,0x54,0xA9,0x43,0x0A,0x0F,0x00,0x00,0x00,0x00, /* Set Gamma                    */
+      16, 0xE1,   0x00,0x15,0x17,0x07,0x11,0x06,0x2B,0x56,0x3C,0x05,0x10,0x0F,0x3F,0x3F,0x0F  /* Set Gamma                    */    
+    };
     
-    /*
-    WRITE_DATA(0x00);
-    WRITE_DATA(0x15);
-    WRITE_DATA(0x17);
-    WRITE_DATA(0x07);
-    WRITE_DATA(0x11);
-    WRITE_DATA(0x06);
-    WRITE_DATA(0x2B);
-    WRITE_DATA(0x56);
-    WRITE_DATA(0x3C);
-    WRITE_DATA(0x05);
-    WRITE_DATA(0x10);
-    WRITE_DATA(0x0F);
-    WRITE_DATA(0x3F);
-    WRITE_DATA(0x3F);
-    WRITE_DATA(0x0F);
-*/
-    const INT8U g1[15]={0x00,0x15,0x17,0x07,0x11,0x06,0x2B,0x56,0x3C,0x05,0x10,0x0F,0x3F,0x3F,0x0F};
-    Write_Bulk(g1, 15);
+    WriteCmdSeq(seq);
 
     sendCMD(0x11);                                                      /* Exit Sleep                   */
     delay(120);
     sendCMD(0x29);                                                      /* Display on                   */
     fillScreen();
 }
-
-
-
-/*
-void TFT::setBl(bool on)
-{
-  digitalWrite(_bl, on ? HIGH : LOW);
-}
-*/
 
 void TFT::setOrientation(int flags) 
 {
@@ -339,36 +250,20 @@ void TFT::setWindow(INT16U StartCol, INT16U EndCol, INT16U StartPage,INT16U EndP
     sendCMD(0x2c);
 }
 
-void TFT::fillScreen(INT16U XL, INT16U XR, INT16U YU, INT16U YD, INT16U color)
+void TFT::fillScreen(INT16 XL, INT16 XR, INT16 YU, INT16 YD, INT16U color)
 {
     unsigned long  XY=0;
 
-    if(XL > XR)
-    {
-        XL = XL^XR;
-        XR = XL^XR;
-        XL = XL^XR;
-    }
-    if(YU > YD)
-    {
-        YU = YU^YD;
-        YD = YU^YD;
-        YU = YU^YD;
-    }
+    if(XL > XR) { XL = XL^XR; XR = XL^XR; XL = XL^XR;}
+    if(YU > YD) { YU = YU^YD; YD = YU^YD; YU = YU^YD;}
 	
-    XL = constrain(XL, getMinX(),getMaxX());
-    XR = constrain(XR, getMinX(),getMaxX());
-    YU = constrain(YU, getMinY(),getMaxY());
-    YD = constrain(YD, getMinY(),getMaxY());
+    XL = constrain(XL,0,getMaxX());
+    XR = constrain(XR,0,getMaxX());
+    YU = constrain(YU,0,getMaxY());
+    YD = constrain(YD,0,getMaxY());
 		
     XY = (XR-XL+1);
     XY = XY*(YD-YU+1);
-
-/*
-    Tft.setCol(XL,XR);
-    Tft.setPage(YU, YD);
-    Tft.sendCMD(0x2c);                                                  // start to write to display ram 
-*/
     setWindow(XL,XR,YU,YD);
     
     TFT_DC_HIGH;
@@ -404,32 +299,25 @@ void TFT::setPixel(INT16U poX, INT16U poY,INT16U color)
     sendData(color);
 }
 
-void TFT::drawChar( INT8U ascii, INT16U poX, INT16U poY, INT16U size, INT16U fgcolor, INT16U bgcolor, bool opaq)
-{
-    // TODO - 
-    // Set window
-    // Scan lines from V to H and write!!
-    // but - do not forget size!!!
-    // do not forget to check fit into screen!!!
-    
+void TFT::drawChar( INT8U ascii, INT16 poX, INT16 poY, INT16U size, INT16U fgcolor, INT16U bgcolor, bool opaq)
+{   
     if(opaq) fillRectangle(poX, poY, FONT_SPACE*size, FONT_Y*size, bgcolor);	
     if((ascii<32)||(ascii>129)) ascii = '?';
-    int x=poX;
-    for (INT8U i=0; i<FONT_SPACE; i++, x+=size ) {
+    INT16U x=poX;
+    for (INT8U i=0; i<FONT_SZ; i++, x+=size ) {
         INT8U temp = simpleFont[ascii-0x20][i];
-        int y=poY;
+        INT16U y=poY;
         for(INT8U f=0;f<8;f++, y+=size)
         {
             if((temp>>f)&0x01) // if bit is set in the font mask
             {
                 fillScreen(x, x+size, y, y+size, fgcolor);
             }
-            //else if(opaq) fillScreen(x, x+size, y, y+size, bgcolor); // this is MUCH slower!
         }
     }
 }
 
-INT16U TFT::drawString(const char *string,INT16U poX, INT16U poY, INT16U size,INT16U fgcolor, INT16U bgcolor, bool opaq)
+INT16U TFT::drawString(const char *string,INT16 poX, INT16 poY, INT16U size,INT16U fgcolor, INT16U bgcolor, bool opaq)
 {
     while(*string)
     {
@@ -441,38 +329,15 @@ INT16U TFT::drawString(const char *string,INT16U poX, INT16U poY, INT16U size,IN
     return poX;
 }
 
-/*
-void  TFT::drawHorizontalLine( INT16U poX, INT16U poY,INT16U length,INT16U color)
+void TFT::drawStraightDashedLine(INT8U dir, INT16 poX, INT16 poY, INT16U length,INT16U color, INT16U bkcolor, INT8U mask)
 {
-    fillScreen(poX,poX+length,poY,poY,color);   
-}
-
-void TFT::drawVerticalLine( INT16U poX, INT16U poY, INT16U length,INT16U color)
-{
-    fillScreen(poX,poX,poY,poY+length,color);   
-}
-*/
-
-void TFT::drawStraightDashedLine(INT8U dir, INT16U poX, INT16U poY, INT16U length,INT16U color, INT16U bkcolor, INT8U mask)
-{
-    if(dir==LCD_HORIZONTAL) {
-      //setCol(poX,poX + length);
-      //setPage(poY,poY);
-      setWindow(poX,poX + length,poY,poY);
-    } else {
-      //setCol(poX,poX);
-      //setPage(poY,poY+length);
-       setWindow(poX,poX,poY,poY + length);
-    }
-    
-    //sendCMD(0x2c);	
-    //for(int i=0; i<length; i++)
-    //  sendData((mask>>(i&0x07))&0x01 ? color : bkcolor);
+    if(dir==LCD_HORIZONTAL) setWindow(poX,poX + length,poY,poY);
+    else setWindow(poX,poX,poY,poY + length);
     while(length--) sendData((mask>>(length&0x07))&0x01 ? color : bkcolor);
 }
 
 
-void TFT::drawLine( INT16U x0,INT16U y0,INT16U x1, INT16U y1,INT16U color)
+void TFT::drawLine( INT16 x0,INT16 y0,INT16 x1, INT16 y1,INT16U color)
 {    
     int x = x1-x0;
     int y = y1-y0;
@@ -493,7 +358,7 @@ void TFT::drawLine( INT16U x0,INT16U y0,INT16U x1, INT16U y1,INT16U color)
     }
 }
 
-void TFT::drawLineThick(INT16U x0,INT16U y0,INT16U x1,INT16U y1,INT16U color,INT8U th)
+void TFT::drawLineThick(INT16 x0,INT16 y0,INT16 x1,INT16 y1,INT16U color,INT8U th)
 {
     int x = x1-x0;
     int y = y1-y0;
@@ -504,21 +369,21 @@ void TFT::drawLineThick(INT16U x0,INT16U y0,INT16U x1,INT16U y1,INT16U color,INT
     for (;;){                                                           /* loop                         */
         e2 = 2*err;
         if (e2 >= dy) {                   /* e_xy+e_x > 0                 */
-            for(int it=-th2; it<=th2; it++) setPixel(x0,y0+it,color); // replace with fillScreen?
-            //drawVerticalLine(x0, y0-th2, th, color);
+            //for(int it=-th2; it<=th2; it++) setPixel(x0,y0+it,color); // replace with fillScreen?
+            drawVerticalLine(x0, y0-th2, th, color);
             if (x0 == x1) break;
             err += dy; x0 += sx;
         }
         if (e2 <= dx) {                   /* e_xy+e_y < 0                 */
-            for(int it=-th2; it<=th2; it++) setPixel(x0+it,y0,color); // replace with fillScreen?
-            //drawHorizontalLine(x0-th2, y, th, color);
+            //for(int it=-th2; it<=th2; it++) setPixel(x0+it,y0,color); // replace with fillScreen?
+            drawHorizontalLine(x0-th2, y0, th, color);
             if (y0 == y1) break;
             err += dx; y0 += sy;
         }
     }
 }
         
-void TFT::drawRectangle(INT16U poX, INT16U poY, INT16U length, INT16U width,INT16U color)
+void TFT::drawRectangle(INT16 poX, INT16 poY, INT16U length, INT16U width,INT16U color)
 {
     drawHorizontalLine(poX, poY, length, color);
     drawHorizontalLine(poX, poY+width, length, color);

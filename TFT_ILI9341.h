@@ -93,17 +93,20 @@
 #define LCD_VERTICAL 1
 
 #ifndef INT8U
-#define INT8U unsigned char
+#define INT8U uint8_t
 #endif
 #ifndef INT16U
-#define INT16U unsigned int
+#define INT16U uint16_t
+#endif
+#ifndef INT16
+#define INT16 int16_t
 #endif
 
 #define FONT_SPACE 6
-//#define FONT_X 8
 #define FONT_Y 8
+#define FONT_SZ 5
 
-extern INT8U simpleFont[][6];
+extern INT8U simpleFont[][FONT_SZ];
 
 class TFT
 {
@@ -118,26 +121,26 @@ public:
 	void sendCMD(INT8U index);
 	//void WRITE_Package(INT16U *data,INT8U howmany);
 	void WRITE_DATA(INT8U data);
-        void Write_Bulk(const INT8U *data, INT8U count);
+        //void Write_Bulk(const INT8U *data, INT8U count);
 	void sendData(INT16U data);
 	//INT8U Read_Register(INT8U Addr,INT8U xParameter);
-	void fillScreen(INT16U XL,INT16U XR,INT16U YU,INT16U YD,INT16U color);
+	void fillScreen(INT16 XL,INT16 XR,INT16 YU,INT16 YD,INT16U color);
         void fillScreen(void);
 	//INT8U readID(void);
 
 	void setOrientation(int value);
 
-	void drawChar(INT8U ascii,INT16U poX, INT16U poY,INT16U size, INT16U fgcolor, INT16U bgcolor=0, bool opaq=false);
-        INT16U drawString(const char *string,INT16U poX, INT16U poY,INT16U size,INT16U fgcolor, INT16U bgcolor=0, bool opaq=false);
-	void fillRectangle(INT16U poX, INT16U poY, INT16U length, INT16U width, INT16U color) { fillScreen(poX, poX+length, poY, poY+width, color); }
+	void drawChar(INT8U ascii,INT16 poX, INT16 poY,INT16U size, INT16U fgcolor, INT16U bgcolor=0, bool opaq=false);
+        INT16U drawString(const char *string,INT16 poX, INT16 poY,INT16U size,INT16U fgcolor, INT16U bgcolor=0, bool opaq=false);
+	void fillRectangle(INT16 poX, INT16 poY, INT16 length, INT16U width, INT16U color) { fillScreen(poX, poX+length, poY, poY+width, color); }
 	
-	void drawLine(INT16U x0,INT16U y0,INT16U x1,INT16U y1,INT16U color);
-        void drawLineThick(INT16U x0,INT16U y0,INT16U x1,INT16U y1,INT16U color,INT8U th);
-        void drawVerticalLine(INT16U poX, INT16U poY,INT16U length,INT16U color) {fillScreen(poX,poX,poY,poY+length,color);}  
-        void drawHorizontalLine(INT16U poX, INT16U poY,INT16U length,INT16U color) {fillScreen(poX,poX+length,poY,poY,color);}   
-        void drawStraightDashedLine(INT8U dir, INT16U poX, INT16U poY, INT16U length, INT16U color, INT16U bkolor, INT8U mask);
+	void drawLine(INT16 x0,INT16 y0,INT16 x1,INT16 y1,INT16U color);
+        void drawLineThick(INT16 x0,INT16 y0,INT16 x1,INT16 y1,INT16U color,INT8U th);
+        void drawVerticalLine(INT16 poX, INT16 poY,INT16 length,INT16U color) {fillScreen(poX,poX,poY,poY+length,color);}  
+        void drawHorizontalLine(INT16 poX, INT16 poY,INT16 length,INT16U color) {fillScreen(poX,poX+length,poY,poY,color);}   
+        void drawStraightDashedLine(INT8U dir, INT16 poX, INT16 poY, INT16U length, INT16U color, INT16U bkolor, INT8U mask);
 
-        void drawRectangle(INT16U poX, INT16U poY, INT16U length,INT16U width,INT16U color);
+        void drawRectangle(INT16 poX, INT16 poY, INT16U length,INT16U width,INT16U color);
 	
         INT16U  getMinX() { return 0; }
         INT16U  getMinY() { return 0; }
@@ -145,6 +148,8 @@ public:
         INT16U  getMaxY() { return _flags&LCD_SWITCH_XY ? MAX_X : MAX_Y; }
         	
 protected:
+        void WriteCmdSeq(const INT8U *data);
+
 	INT8U _flags;	
 	INT8U _cs, _dc, _bl;	
 	
