@@ -249,11 +249,11 @@ void loop()
      
    if(ms-mdisp > 500 || mdisp>ms) { // 0.5 sec screen update
      mdisp=ms;   
-     if(!(alarms&WS_ALR_TO) && TempHistory::interval(rf_millis)>WS_SENS_TIMEOUT) { 
+     if(!(alarms&WS_ALR_TO) && TempHistory::interval(rf_millis)>WS_SENS_TIMEOUT) { // Alarm condition on no-data timeout
        alarms |= WS_ALR_TO;
        //alarm_val=(millis()-rf_millis)/60000;
        alarm_cnt[WS_ALR_TO_IDX]++;
-       updateScreen(false);
+       updateScreen(true);
      }
      updateScreenTime(false);       
    }  
@@ -268,10 +268,10 @@ void processShortClick() {
   else {
     if(uilev==WS_UI_SET) {
       dispStat("EDIT MOV");
-      hiLightDigit(editmode<3?editmode-1:editmode, BLACK);
+      hiLightDigit(BLACK);
       editmode++;
       if(editmode>4) editmode=1;
-      hiLightDigit(editmode<3?editmode-1:editmode, WHITE);
+      hiLightDigit(WHITE);
     }
   }
 }
@@ -281,11 +281,11 @@ void processLongClick() {
     if(!editmode) {
       dispStat("EDIT  ON");
       editmode=1;
-      hiLightDigit(0, WHITE);
+      hiLightDigit(WHITE);
     } else {
       dispStat("EDIT OFF");
       timeStore();
-      hiLightDigit(editmode<3?editmode-1:editmode, BLACK);
+      hiLightDigit(BLACK);
       editmode=0;
       dispStat("TIME STOR");
     }
@@ -307,7 +307,7 @@ void processShortRightClick() {
   if(uilev!=WS_UI_SET) return;
   if(!editmode) return;
   timeUp(editmode-1, WS_CHAR_TIME_SET_SZ);
-  Tft.drawRectangle(FONT_SPACE*WS_CHAR_TIME_SET_SZ*(editmode<3?editmode-1:editmode), 40, FONT_SPACE*WS_CHAR_TIME_SET_SZ, FONT_Y*WS_CHAR_TIME_SET_SZ, WHITE);
+  hiLightDigit(WHITE);
 }       
 
 void updateScreen(bool refresh) {
@@ -328,7 +328,7 @@ void updateScreen(bool refresh) {
      if(prev_vcc!=last_vcc || refresh) {
        prev_vcc=last_vcc;
        printVcc(last_vcc); strcat(buf, "v");
-       Tft.drawString(buf,200,211,2, GREEN, BLACK, true); // v= !!!!
+       line_print_at(buf, 200, 211);
      }
      if(refresh) updateScreenTime(true);  
      }    
@@ -366,9 +366,7 @@ void updateScreen(bool refresh) {
       mHist.iterBegin();  
       while(mHist.movePrev());
       sprintf(buf, "DUR: %02.2d:%02.2d", (int)mHist.getPrevMinsBefore()/60,(int)mHist.getPrevMinsBefore()%60); line_print(buf);  
-      for(int i=0; i<=WS_ALR_LAST_IDX; i++) {
-        sprintf(buf, "A%d: %d", i, (int)alarm_cnt[i]); line_print(buf);
-      }
+      for(int i=0; i<=WS_ALR_LAST_IDX; i++) sprintf(buf, "A%d: %d", i, (int)alarm_cnt[i]); line_print(buf);      
       }
       break;
     case WS_UI_SET: 
@@ -378,7 +376,8 @@ void updateScreen(bool refresh) {
   }
 }
 
-void hiLightDigit(uint8_t d, uint16_t color) {
+void hiLightDigit(uint16_t color) {
+  uint8_t d=(editmode>0 && editmode<3)?editmode-1:editmode;
   Tft.drawRectangle(FONT_SPACE*WS_CHAR_TIME_SET_SZ*d, 40, FONT_SPACE*WS_CHAR_TIME_SET_SZ, FONT_Y*WS_CHAR_TIME_SET_SZ, color);
 }
 
@@ -395,9 +394,31 @@ void updateScreenTime(bool reset) {
   }
 }
 
-void dispTimeout(unsigned long ts, bool reset, int x, int y, int sz) {
+char *printTemp(char *buf, int16_t disptemp, int8_t showg) {
+  char s='+';
+  if(disptemp<0) {
+    s='-';
+    disptemp=-disptemp;
+  } else if(disptemp==0) s=' ';
+  sprintf(buf, "%c%d.%d", s, disptemp/10, disptemp%10);
+  if(showg) strcat(buf, "\177c "); //"degree(DEC=127)C "
+  return buf;
+} 
+
+
+char *printVcc(int16_t vcc) {
+  sprintf(buf, "%d.%02.2d", vcc/100, vcc%100);   
+  return buf;
+}
+
+
+  static byte p_date[3]={-1,-1,-1};
+  static byte p_time[3]={-1,-1,-1};
+
   static byte p_to[3]={-1,-1,-1};
   static byte p_days=-1;
+
+void dispTimeout(unsigned long ts, bool reset, int x, int y, int sz) {
   byte tmp[3];
   
   if(reset) p_days=-1;
@@ -410,41 +431,19 @@ void dispTimeout(unsigned long ts, bool reset, int x, int y, int sz) {
     p_days=days;
   }
   else {
-     disp_dig(reset, 3, 2, tmp, p_to, x, y, sz, GREEN, ':', 0);
+     disp_dig(reset, 3, tmp, p_to, x, y, sz, GREEN, ':', 0);
   }     
 }
 
-char *printTemp(char *buf, int16_t disptemp, int8_t showg) {
-  char s='+';
-  if(disptemp<0) {
-    s='-';
-    disptemp=-disptemp;
-  } else if(disptemp==0) s=' ';
-  if(showg) {
-    sprintf(buf, "%c%d.%d%cc", s, disptemp/10, disptemp%10, (uint8_t)127);
-    //-xx.xgC = 7 chars
-    while(strlen(buf)<7) strcat(buf, " "); // UGLY 
-  } else sprintf(buf, "%c%d.%d", s, disptemp/10, disptemp%10);
-  return buf;
-} 
-
-
-char *printVcc(int16_t vcc) {
-  sprintf(buf, "%d.%02.2d", vcc/100, vcc%100);   
-  return buf;
-}
-
-static byte p_date[3]={-1,-1,-1};
-static byte p_time[3]={-1,-1,-1};
 
 void printTime(DateTime *pDT, bool reset, int x, int y, int sz, bool blinkd, bool printdate){
   byte tmp[3];  
   tmp[0]=pDT->hour(); tmp[1]=pDT->minute(); tmp[2]=pDT->second();
-  disp_dig(reset, 2, 2, tmp, p_time, x, y, sz, YELLOW, (!blinkd || p_time[2]%2) ? ':' : ' ', tmp[2]!=p_time[2]);
-  p_time[2]=tmp[2];
+  disp_dig(reset, 2, tmp, p_time, x, y, sz, YELLOW, (!blinkd || p_time[2]%2) ? ':' : ' ', tmp[2]!=p_time[2]);
+  p_time[2]=tmp[2]; // store sec
   if(printdate) {
     tmp[0]=pDT->day(); tmp[1]=pDT->month(); tmp[2]=pDT->year()-2000;
-    disp_dig(reset, 3, 2, tmp, p_date, x+6*sz*FONT_SPACE, y, sz, YELLOW, '/', false);
+    disp_dig(reset, 3, tmp, p_date, x+6*sz*FONT_SPACE, y, sz, YELLOW, '/', false);
   }
 }
 
@@ -458,7 +457,7 @@ void timeUp(int dig, int sz) {
   byte tmp[3];
   memcpy(tmp, p_time, 3);
   tmp[ig]=val;
-  disp_dig(false, 2, 2, tmp, p_time, 0, 40, sz, YELLOW, ':', true);
+  disp_dig(false, 2, tmp, p_time, 0, 40, sz, YELLOW, ':', true);
 }
 
 void timeStore() {
@@ -467,7 +466,40 @@ void timeStore() {
   RTC.adjust(set); 
 }
 
-void disp_dig(byte redraw, byte ngrp, byte nsym, byte *data, byte *p_data, int x, int y, int sz, int color, char delim, byte drdrm) {
+/* 
+redraw: always redraw
+ngrp: number of digit groups (hh:mm = 2, hh:mm:ss, yy:mm:dd = 3). Always 2 digits in a group
+data: ptr to new data. byte[ngrp]
+pdata: ptr to old data. byte[ngrp]
+x, y, sz - trivial
+delim: delimeter symbol. shown before every group except of first
+drdrm: always redraw separator (that's for blinking feature); 
+*/
+/*
+
+// more size...
+
+void disp_dig(byte redraw, byte ngrp, byte *data, byte *p_data, int x, int y, int sz, int color, char delim, byte drdrm) {
+  uint8_t *pbuf=(uint8_t *)buf;
+  for(byte igrp=0; igrp<ngrp; igrp++) {  
+    if(igrp) *pbuf++=(redraw || drdrm) ? delim : 0xff;
+    for(byte isym=0; isym<2; isym++) {
+       byte div10=(isym==0?10:1);
+       byte dig=(data[igrp]/div10)%10;
+       *pbuf++=(redraw || (dig!=(p_data[igrp]/div10)%10)) ? '0'+dig : 0xff;
+    }
+    p_data[igrp]=data[igrp];
+  }    
+  *pbuf=0;
+  pbuf=(uint8_t *)buf;
+  while(*pbuf) {
+    if(*pbuf!=0xff) Tft.drawChar(*pbuf++, x, y, sz, color, BLACK, true); 
+    x+=FONT_SPACE*sz;
+  }
+}
+*/
+
+void disp_dig(byte redraw, byte ngrp, byte *data, byte *p_data, int x, int y, int sz, int color, char delim, byte drdrm) {
   int posX=x;
   for(byte igrp=0; igrp<ngrp; igrp++) {  
     if(igrp) {
@@ -475,15 +507,17 @@ void disp_dig(byte redraw, byte ngrp, byte nsym, byte *data, byte *p_data, int x
         Tft.drawChar(delim, posX, y, sz, color, BLACK, true);  
       posX+=FONT_SPACE*sz;
     }
-    for(byte isym=0; isym<nsym; isym++) {
+    for(byte isym=0; isym<2; isym++) {
        byte div10=(isym==0?10:1);
-       if(redraw || (data[igrp]/div10)%10!=(p_data[igrp]/div10)%10)
-         Tft.drawChar('0'+(data[igrp]/div10)%10,posX,y,sz, color, BLACK, true); 
+       byte dig=(data[igrp]/div10)%10;
+       if(redraw || dig!=(p_data[igrp]/div10)%10)
+         Tft.drawChar('0'+dig,posX,y,sz, color, BLACK, true); 
        posX+=FONT_SPACE*sz;
     }
     p_data[igrp]=data[igrp];
   }    
 }
+
 
 void dispErr() {
   sprintf(buf, "ERR=%04.4d", err);
@@ -508,13 +542,17 @@ uint8_t printHist(uint8_t sid, uint8_t idx) {
   }  
   line_init(GREEN, 2);
   do {
+    TempHistory::wt_msg_hist *h = mHist.getPrev();
     sprintf(buf, "%4d ", (int)i);
     line_printn(buf);
-    int16_t vcc=mHist.getPrev()->getVal(TH_HIST_VAL_V);    
-    line_printn(printTemp(buf, mHist.getPrev()->getVal(TH_HIST_VAL_T), 0));
+    //int16_t vcc=mHist.getPrev()->getVal(TH_HIST_VAL_V);    
+    //line_printn(printTemp(buf, mHist.getPrev()->getVal(TH_HIST_VAL_T), 0));
+    int16_t vcc=h->getVal(TH_HIST_VAL_V);    
+    line_printn(printTemp(buf, h->getVal(TH_HIST_VAL_T), 0));
     line_printn(" ");
     line_printn(printVcc(vcc));
-    sprintf(buf, " (%d min)", mHist.getPrev()->mins);
+    //sprintf(buf, " (%d min)", mHist.getPrev()->mins);
+    sprintf(buf, " (%d min)", h->mins);
     line_print(buf);
     i++;
     } while(mHist.movePrev() && line_getpos()<230);
@@ -522,6 +560,7 @@ uint8_t printHist(uint8_t sid, uint8_t idx) {
 }
 
 void chartHist(uint8_t sid, uint8_t scale, uint8_t type) {  
+  
   const uint8_t chart_xstep_nom=1; 
   const uint8_t chart_xstep_denoms[WS_CHART_NLEV]={7, 21, 49, 217};
   uint8_t chart_xstep_denom = chart_xstep_denoms[scale];
@@ -546,17 +585,15 @@ void chartHist(uint8_t sid, uint8_t scale, uint8_t type) {
   xr=(int32_t)mbefore*chart_xstep_nom/chart_xstep_denom;
   if(xr>=chart_width) xr=chart_width-1;
   
-  Tft.drawStraightDashedLine(LCD_VERTICAL, xr, chart_top, chart_height,BLUE,BLACK, 0x0f); // now line
+  drawVertDashLine(xr, BLUE);
 
   DateTime now = RTC.now();
   if(xr>36) { // draw midnight line  
-    //DateTime start=DateTime(now.year(), now.month(), now.day());
-    //uint16_t mid = (now.unixtime() - start.unixtime())/60;
     uint16_t mid = now.hour()*60+now.minute();
     int16_t x1;
     while(mid<mbefore) {
       x1=xr-(int32_t)mid*chart_xstep_nom/chart_xstep_denom;
-      if(x1>0) Tft.drawStraightDashedLine(LCD_VERTICAL, x1, chart_top, chart_height,YELLOW,BLACK, 0x0f); // midnight line
+      if(x1>0) drawVertDashLine(x1, YELLOW);
       mid+=1440; // mins in 24h
     }
   }
@@ -587,9 +624,9 @@ void chartHist(uint8_t sid, uint8_t scale, uint8_t type) {
 
 void chartHist60(uint8_t sid) 
 {  
+  
   const int DUR_24=24;
   const int DUR_MIN=60;
-  //int32_t acc[DUR_24];
   int16_t acc[DUR_24];
   uint8_t cnt[DUR_24];  
   int16_t mint, maxt;
@@ -648,10 +685,10 @@ void chartHist60(uint8_t sid)
   uint16_t mid = (midnight.unixtime()-start.unixtime())/3600;
   printTime(&start, true, 0, 224, 2, false, false);     
   printTime(&now, true, chart_width, 224, 2, false, false);   
-  Tft.drawStraightDashedLine(LCD_VERTICAL, xstep*mid, chart_top, chart_height,YELLOW,BLACK, 0x0f); // midnight line
-  // draw noon line
+  drawVertDashLine(xstep*mid, YELLOW); // draw midnight line
   mid=mid>12 ? mid-12 : mid+12;
-  Tft.drawStraightDashedLine(LCD_VERTICAL, xstep*mid, chart_top, chart_height,RED,BLACK, 0x0f); // midnight line
+  drawVertDashLine(xstep*mid, RED);    // draw noon line
+  
 }
 
 
@@ -664,22 +701,6 @@ int8_t startIter() {
   else return 1;
 }
 
-/*
-int16_t  adjMinMax(int16_t *pmint, int16_t *pmaxt) {
-  // uptimize by deref ???
-  if(*pmint%50) {
-    if(*pmint>0) *pmint=(*pmint/50)*50;
-     else *pmint=(*pmint/50-1)*50;
-  }  
-  if(*pmaxt%50) {
-     if(*pmaxt>0) *pmaxt=(*pmaxt/50+1)*50;
-     else *pmaxt=(*pmaxt/50)*50;
-  }  
-  if(*pmaxt==*pmint) {*pmint-=50; *pmaxt+=50;}  
-  return *pmaxt-*pmint;
-}
-*/
-
 int16_t prepChart(int16_t *ptmint, int16_t *ptmaxt, uint8_t type) {
   int16_t mint=*ptmint, maxt=*ptmaxt;
   line_init(GREEN, 2);
@@ -689,8 +710,6 @@ int16_t prepChart(int16_t *ptmint, int16_t *ptmaxt, uint8_t type) {
     line_printn(printVcc(mint)); line_printn("..."); line_printn(printVcc(maxt)); 
   }
   
-//  int16_t tdiff=adjMinMax(pmint, pmaxt);
-
   if(mint%50) {
     if(mint>0) mint=(mint/50)*50;
      else mint=(mint/50-1)*50;
@@ -714,6 +733,11 @@ int16_t prepChart(int16_t *ptmint, int16_t *ptmaxt, uint8_t type) {
   *ptmint=mint;
   return tdiff;
 }
+
+void drawVertDashLine(int x, uint16_t color) {
+  Tft.drawStraightDashedLine(LCD_VERTICAL, x, chart_top, chart_height, color,BLACK, 0x0f); // 
+}
+
 
 static uint16_t _lp_vpos=0;
 static int16_t _lp_hpos=0;
