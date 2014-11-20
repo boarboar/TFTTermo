@@ -143,6 +143,8 @@ const int WS_BL_TO=20000;
 uint32_t rts=0; 
 char buf[32];
 
+uint8_t processClick(uint8_t id, uint8_t cnt, void (*pShort)(), void (*pLong)());
+
 void setup()
 {
   delay(100);
@@ -176,12 +178,6 @@ void setup()
       digitalWrite(RED_LED, HIGH); delay(500); digitalWrite(RED_LED, LOW);
     }
   }
-
-/*
- if(digitalRead(BUTTON_1)==LOW) {
-   dispStat("TEST MOD");
- }
-*/
 
  mHist.init(); 
  mdisp=mui=millis();
@@ -218,35 +214,10 @@ void loop()
      uilev=0;
      updateScreen(true);
    }
-    
-   if(digitalRead(BUTTON_1)==LOW) {
-     if(!bt1cnt) bt1cnt=1;
-     else if(bt1cnt<100) bt1cnt++;
-   } 
-   else if(bt1cnt) {
-     if(bt1cnt<2) {;} // debounce
-     else {
-       mbloff=ms+WS_BL_TO;
-       if(bt1cnt<20) processShortClick(); 
-       else processLongClick();
-     }
-     bt1cnt=0;
-   }
-   
-   if(digitalRead(BUTTON_2)==LOW) {
-     if(!bt2cnt) bt2cnt=1;
-     else if(bt2cnt<100) bt2cnt++;
-   } else 
-   if(bt2cnt) {
-     if(bt2cnt<2) {;} // debounce
-     else {
-       mbloff=ms+WS_BL_TO;
-       if(bt2cnt<20) processShortRightClick();
-       else { ; } // longclick
-     }
-     bt2cnt=0;
-   }
      
+   bt1cnt=processClick(BUTTON_1, bt1cnt, processShortClick, processLongClick); 
+   bt2cnt=processClick(BUTTON_2, bt2cnt, processShortRightClick, NULL); 
+   
    if(ms-mdisp > 500 || mdisp>ms) { // 0.5 sec screen update
      mdisp=ms;   
      if(!(alarms&WS_ALR_TO) && TempHistory::interval(rf_millis)>WS_SENS_TIMEOUT) { // Alarm condition on no-data timeout
@@ -260,6 +231,24 @@ void loop()
  } // UI cycle
 }
 
+uint8_t processClick(uint8_t id, uint8_t cnt, void (*pShort)(), void (*pLong)()) {
+   if(digitalRead(id)==LOW) {
+     if(!cnt) cnt=1;
+     else if(cnt<100) cnt++;
+   } 
+   else if(cnt) {
+     if(cnt<2) {;} // debounce
+     else {
+        mbloff=millis()+WS_BL_TO;
+        if(cnt<20) { if(pShort) (*pShort)(); }
+        else { if(pLong) (*pLong)(); }
+      }
+     cnt=0;
+   }
+  return cnt;
+}
+
+
 void processShortClick() {
   if(!editmode) { 
     uilev=(uilev+1)%WS_NUILEV;
@@ -269,8 +258,7 @@ void processShortClick() {
     if(uilev==WS_UI_SET) {
       dispStat("EDIT MOV");
       hiLightDigit(BLACK);
-      editmode++;
-      if(editmode>4) editmode=1;
+      if(++editmode>4) editmode=1;
       hiLightDigit(WHITE);
     }
   }
@@ -322,7 +310,8 @@ void updateScreen(bool refresh) {
     case WS_UI_MAIN: {
      if((prev_tmp!=last_tmp || refresh) && last_tmp!=TH_NODATA) {
        int16_t diff = mHist.getDiff(last_tmp, 1);
-       Tft.drawString(printTemp(buf, last_tmp, 1), 0, 80,6, alarms&WS_ALR_TO ? RED : GREEN, BLACK, true);
+       printTemp(last_tmp); strcat(buf, "\177c "); //"degree(DEC=127)C "
+       Tft.drawString(buf, 0, 80,6, alarms&WS_ALR_TO ? RED : GREEN, BLACK, true);
        Tft.drawChar( diff==0? ' ': diff>0 ? WS_CHAR_UP : WS_CHAR_DN, FONT_SPACE*6*7, 80, 4, YELLOW, BLACK, true);
      }
      if(prev_vcc!=last_vcc || refresh) {
@@ -382,26 +371,26 @@ void hiLightDigit(uint16_t color) {
 }
 
 void updateScreenTime(bool reset) {
-  DateTime now = RTC.now();
+  uint8_t sz=0;
   if(uilev==WS_UI_MAIN) {
-    printTime(&now, reset, 0, 40, WS_CHAR_TIME_SZ, true, false);   
+    sz=WS_CHAR_TIME_SZ;
     dispTimeout((millis()-last_millis_temp)/1000, reset, 0, 160, 2);
   } else if(uilev==WS_UI_SET) {
-      if(editmode) {
-        ;
-      }
-      else printTime(&now, reset, 0, 40, WS_CHAR_TIME_SET_SZ, false, false);   
+      if(!editmode) sz=WS_CHAR_TIME_SET_SZ;   
+  }
+  if(sz) {
+    DateTime now = RTC.now();
+    printTime(&now, reset, 0, 40, sz, true, false);   
   }
 }
 
-char *printTemp(char *buf, int16_t disptemp, int8_t showg) {
+char *printTemp(int16_t disptemp) {
   char s='+';
   if(disptemp<0) {
     s='-';
     disptemp=-disptemp;
   } else if(disptemp==0) s=' ';
   sprintf(buf, "%c%d.%d", s, disptemp/10, disptemp%10);
-  if(showg) strcat(buf, "\177c "); //"degree(DEC=127)C "
   return buf;
 } 
 
@@ -411,12 +400,10 @@ char *printVcc(int16_t vcc) {
   return buf;
 }
 
-
-  static byte p_date[3]={-1,-1,-1};
-  static byte p_time[3]={-1,-1,-1};
-
-  static byte p_to[3]={-1,-1,-1};
-  static byte p_days=-1;
+static byte p_date[3]={-1,-1,-1};
+static byte p_time[3]={-1,-1,-1};
+static byte p_to[3]={-1,-1,-1};
+static byte p_days=-1;
 
 void dispTimeout(unsigned long ts, bool reset, int x, int y, int sz) {
   byte tmp[3];
@@ -475,29 +462,6 @@ x, y, sz - trivial
 delim: delimeter symbol. shown before every group except of first
 drdrm: always redraw separator (that's for blinking feature); 
 */
-/*
-
-// more size...
-
-void disp_dig(byte redraw, byte ngrp, byte *data, byte *p_data, int x, int y, int sz, int color, char delim, byte drdrm) {
-  uint8_t *pbuf=(uint8_t *)buf;
-  for(byte igrp=0; igrp<ngrp; igrp++) {  
-    if(igrp) *pbuf++=(redraw || drdrm) ? delim : 0xff;
-    for(byte isym=0; isym<2; isym++) {
-       byte div10=(isym==0?10:1);
-       byte dig=(data[igrp]/div10)%10;
-       *pbuf++=(redraw || (dig!=(p_data[igrp]/div10)%10)) ? '0'+dig : 0xff;
-    }
-    p_data[igrp]=data[igrp];
-  }    
-  *pbuf=0;
-  pbuf=(uint8_t *)buf;
-  while(*pbuf) {
-    if(*pbuf!=0xff) Tft.drawChar(*pbuf++, x, y, sz, color, BLACK, true); 
-    x+=FONT_SPACE*sz;
-  }
-}
-*/
 
 void disp_dig(byte redraw, byte ngrp, byte *data, byte *p_data, int x, int y, int sz, int color, char delim, byte drdrm) {
   int posX=x;
@@ -545,13 +509,10 @@ uint8_t printHist(uint8_t sid, uint8_t idx) {
     TempHistory::wt_msg_hist *h = mHist.getPrev();
     sprintf(buf, "%4d ", (int)i);
     line_printn(buf);
-    //int16_t vcc=mHist.getPrev()->getVal(TH_HIST_VAL_V);    
-    //line_printn(printTemp(buf, mHist.getPrev()->getVal(TH_HIST_VAL_T), 0));
     int16_t vcc=h->getVal(TH_HIST_VAL_V);    
-    line_printn(printTemp(buf, h->getVal(TH_HIST_VAL_T), 0));
+    line_printn(printTemp(h->getVal(TH_HIST_VAL_T)));
     line_printn(" ");
     line_printn(printVcc(vcc));
-    //sprintf(buf, " (%d min)", mHist.getPrev()->mins);
     sprintf(buf, " (%d min)", h->mins);
     line_print(buf);
     i++;
@@ -600,17 +561,15 @@ void chartHist(uint8_t sid, uint8_t scale, uint8_t type) {
 
   int cnt=0;
   x0=y0=0;
-  mHist.iterBegin();
-  mHist.movePrev();
+  mHist.iterBegin(); mHist.movePrev();
   do {
     int y1=(int32_t)(maxt-mHist.getPrev()->getVal(type))*chart_height/tdiff;
     int x1=xr-(int32_t)mHist.getPrevMinsBefore()*chart_xstep_nom/chart_xstep_denom;
     if(cnt)  {
      if(x1>0 && x0>0) 
        Tft.drawLineThick(x1,chart_top+y1,x0,chart_top+y0, CYAN, 5);
-    }
-    y0=y1;
-    x0=x1;
+    }    
+    x0=x1; y0=y1;
     cnt++;
   } while(mHist.movePrev() && x0>0);    
   
@@ -623,10 +582,12 @@ void chartHist(uint8_t sid, uint8_t scale, uint8_t type) {
 }
 
 void chartHist60(uint8_t sid) 
-{  
-  
+{    
   const int DUR_24=24;
   const int DUR_MIN=60;
+  const int xstep = chart_width/DUR_24;
+
+  { // histogramm scope
   int16_t acc[DUR_24];
   uint8_t cnt[DUR_24];  
   int16_t mint, maxt;
@@ -655,16 +616,15 @@ void chartHist60(uint8_t sid)
 
   int16_t tdiff=prepChart(&mint, &maxt, TH_HIST_VAL_T);
  
-  int xstep = chart_width/DUR_24;
   int y_z=(int32_t)(maxt-0)*chart_height/tdiff; // from top
   int x=0; 
-
 
   for(int i=0; i<DUR_24; i++) {
     // should be up from zerolinr if positive, down if negative
     int islot=DUR_24-1-i; // oldest at left
     if(cnt[islot]) {
       int val=acc[islot]/cnt[islot];
+      /*
       int y0=0;
       int h;
       if(val<0) {
@@ -674,11 +634,36 @@ void chartHist60(uint8_t sid)
         if(mint>0) { y0=chart_height; h=(int32_t)(val-mint)*chart_height/tdiff;} else { y0=y_z; h=(int32_t)(val)*chart_height/tdiff; }
         y0-=h;
       }
+      */
+      /*
+      int y0=y_z;
+      int h=(int32_t)(val)*chart_height/tdiff;
+      if(val<0) {
+        if(maxt<0) { y0=0; h=(int32_t)(maxt-val)*chart_height/tdiff; } else { h=-h; }
+      }
+      else {
+        if(mint>0) { y0=chart_height; h=(int32_t)(val-mint)*chart_height/tdiff;} 
+        y0-=h;
+      }
+      */
+
+      int y0=y_z;
+      int h;
+      if(val<0) {
+        if(maxt<0) { y0=0; h=maxt-val; } else { h=-val; }
+      }
+      else {
+        if(mint>0) { y0=chart_height; h=val-mint;} else {h=val; }
+      }
+      h=(int32_t)h*chart_height/tdiff;
+      if(val>0) y0-=h;
+      
       Tft.fillRectangle(x+1, chart_top+y0, xstep-2, h, WHITE);
     }
     x+=xstep;
   }
-  
+  }
+  { // time labels scope
   DateTime now = RTC.now();  
   DateTime start=DateTime(now.unixtime()-86400);
   DateTime midnight=DateTime(now.year(), now.month(), now.day());
@@ -687,8 +672,8 @@ void chartHist60(uint8_t sid)
   printTime(&now, true, chart_width, 224, 2, false, false);   
   drawVertDashLine(xstep*mid, YELLOW); // draw midnight line
   mid=mid>12 ? mid-12 : mid+12;
-  drawVertDashLine(xstep*mid, RED);    // draw noon line
-  
+  drawVertDashLine(xstep*mid, RED);    // draw noon line  
+  }
 }
 
 
@@ -705,7 +690,7 @@ int16_t prepChart(int16_t *ptmint, int16_t *ptmaxt, uint8_t type) {
   int16_t mint=*ptmint, maxt=*ptmaxt;
   line_init(GREEN, 2);
   if(type==TH_HIST_VAL_T) {
-    line_printn(printTemp(buf, mint, 0)); line_printn("..."); line_printn(printTemp(buf, maxt, 0)); 
+    line_printn(printTemp(mint)); line_printn("..."); line_printn(printTemp(maxt)); 
   } else {
     line_printn(printVcc(mint)); line_printn("..."); line_printn(printVcc(maxt)); 
   }
@@ -725,9 +710,10 @@ int16_t prepChart(int16_t *ptmint, int16_t *ptmaxt, uint8_t type) {
   int16_t y0;  
   y0=(maxt-mint)>100 ? 50 : 10;  
   for(int16_t ig=mint; ig<=maxt; ig+=y0) { // degree lines
-     int16_t yl=chart_top+(int32_t)(maxt-ig)*chart_height/(maxt==mint? 1 : maxt-mint);
+     //int16_t yl=chart_top+(int32_t)(maxt-ig)*chart_height/(maxt==mint? 1 : maxt-mint);
+     int16_t yl=chart_top+(int32_t)(maxt-ig)*chart_height/tdiff;
      if(ig>mint && ig<maxt) Tft.drawStraightDashedLine(LCD_HORIZONTAL, 0, yl, chart_width, ig==0? BLUE : GREEN, BLACK, 0x0f);
-     line_print_at(type==TH_HIST_VAL_T ? printTemp(buf, ig, 0) : printVcc(ig), chart_width+1, yl-FONT_Y);
+     line_print_at(type==TH_HIST_VAL_T ? printTemp(ig) : printVcc(ig), chart_width+1, yl-FONT_Y);
   }
   *ptmaxt=maxt;
   *ptmint=mint;
