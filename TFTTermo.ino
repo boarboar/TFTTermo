@@ -380,7 +380,7 @@ void updateScreenTime(bool reset) {
   }
   if(sz) {
     DateTime now = RTC.now();
-    printTime(&now, reset, 0, 40, sz, true, false);   
+    printTime(now, reset, 0, 40, sz, true, false);   
   }
 }
 
@@ -422,18 +422,30 @@ void dispTimeout(unsigned long ts, bool reset, int x, int y, int sz) {
   }     
 }
 
-
-void printTime(DateTime *pDT, bool reset, int x, int y, int sz, bool blinkd, bool printdate){
+void printTime(const DateTime& pDT, bool reset, int x, int y, int sz, bool blinkd, bool printdate){
   byte tmp[3];  
-  tmp[0]=pDT->hour(); tmp[1]=pDT->minute(); tmp[2]=pDT->second();
+  tmp[0]=pDT.hour(); tmp[1]=pDT.minute(); tmp[2]=pDT.second();
   disp_dig(reset, 2, tmp, p_time, x, y, sz, YELLOW, (!blinkd || p_time[2]%2) ? ':' : ' ', tmp[2]!=p_time[2]);
   p_time[2]=tmp[2]; // store sec
   if(printdate) {
-    tmp[0]=pDT->day(); tmp[1]=pDT->month(); tmp[2]=pDT->year()-2000;
+    tmp[0]=pDT.day(); tmp[1]=pDT.month(); tmp[2]=pDT.year()-2000;
     disp_dig(reset, 3, tmp, p_date, x+6*sz*FONT_SPACE, y, sz, YELLOW, '/', false);
   }
 }
 
+/*
+void printTime(const DateTime& pDT, bool reset, int x, int y, int sz, bool blinkd, bool printdate){
+  byte tmp[6];  
+  //tmp[0]=pDT.hour(); tmp[1]=pDT.minute(); tmp[2]=pDT.second();
+  pDT.get(tmp);
+  disp_dig(reset, 2, tmp, p_time, x, y, sz, YELLOW, (!blinkd || p_time[2]%2) ? ':' : ' ', tmp[2]!=p_time[2]);
+  p_time[2]=tmp[2]; // store sec
+  if(printdate) {
+    //tmp[0]=pDT.day(); tmp[1]=pDT.month(); tmp[2]=pDT.year()-2000;
+    disp_dig(reset, 3, tmp+3, p_date, x+6*sz*FONT_SPACE, y, sz, YELLOW, '/', false);
+  }
+}
+*/
 void timeUp(int dig, int sz) {
   int ig=dig/2;
   int id=(dig+1)%2; 
@@ -448,8 +460,8 @@ void timeUp(int dig, int sz) {
 }
 
 void timeStore() {
-  DateTime now=RTC.now();
-  DateTime set(now.year(), now.month(), now.day(), p_time[0], p_time[1], 0);
+  DateTime set=RTC.now();
+  set.setTime(p_time[0], p_time[1], 0);
   RTC.adjust(set); 
 }
 
@@ -576,7 +588,7 @@ void chartHist(uint8_t sid, uint8_t scale, uint8_t type) {
   
  if(xr>36) {
    DateTime start=DateTime(now.unixtime()-(uint32_t)mHist.getPrevMinsBefore()*60);
-   printTime(&start, true, 0, 224, 2, false, true);   
+   printTime(start, true, 0, 224, 2, false, true);   
  }  
  
 }
@@ -624,29 +636,6 @@ void chartHist60(uint8_t sid)
     int islot=DUR_24-1-i; // oldest at left
     if(cnt[islot]) {
       int val=acc[islot]/cnt[islot];
-      /*
-      int y0=0;
-      int h;
-      if(val<0) {
-        if(maxt<0) { y0=0; h=(int32_t)(maxt-val)*chart_height/tdiff; } else { y0=y_z; h=(int32_t)(-val)*chart_height/tdiff; }
-      }
-      else {
-        if(mint>0) { y0=chart_height; h=(int32_t)(val-mint)*chart_height/tdiff;} else { y0=y_z; h=(int32_t)(val)*chart_height/tdiff; }
-        y0-=h;
-      }
-      */
-      /*
-      int y0=y_z;
-      int h=(int32_t)(val)*chart_height/tdiff;
-      if(val<0) {
-        if(maxt<0) { y0=0; h=(int32_t)(maxt-val)*chart_height/tdiff; } else { h=-h; }
-      }
-      else {
-        if(mint>0) { y0=chart_height; h=(int32_t)(val-mint)*chart_height/tdiff;} 
-        y0-=h;
-      }
-      */
-
       int y0=y_z;
       int h;
       if(val<0) {
@@ -665,11 +654,11 @@ void chartHist60(uint8_t sid)
   }
   { // time labels scope
   DateTime now = RTC.now();  
+  printTime(now, true, chart_width, 224, 2, false, false);   
   DateTime start=DateTime(now.unixtime()-86400);
-  DateTime midnight=DateTime(now.year(), now.month(), now.day());
-  uint16_t mid = (midnight.unixtime()-start.unixtime())/3600;
-  printTime(&start, true, 0, 224, 2, false, false);     
-  printTime(&now, true, chart_width, 224, 2, false, false);   
+  printTime(start, true, 0, 224, 2, false, false);       
+  now.setTime(); //midnight
+  uint16_t mid = (now.unixtime()-start.unixtime())/3600;
   drawVertDashLine(xstep*mid, YELLOW); // draw midnight line
   mid=mid>12 ? mid-12 : mid+12;
   drawVertDashLine(xstep*mid, RED);    // draw noon line  
@@ -710,7 +699,6 @@ int16_t prepChart(int16_t *ptmint, int16_t *ptmaxt, uint8_t type) {
   int16_t y0;  
   y0=(maxt-mint)>100 ? 50 : 10;  
   for(int16_t ig=mint; ig<=maxt; ig+=y0) { // degree lines
-     //int16_t yl=chart_top+(int32_t)(maxt-ig)*chart_height/(maxt==mint? 1 : maxt-mint);
      int16_t yl=chart_top+(int32_t)(maxt-ig)*chart_height/tdiff;
      if(ig>mint && ig<maxt) Tft.drawStraightDashedLine(LCD_HORIZONTAL, 0, yl, chart_width, ig==0? BLUE : GREEN, BLACK, 0x0f);
      line_print_at(type==TH_HIST_VAL_T ? printTemp(ig) : printVcc(ig), chart_width+1, yl-FONT_Y);

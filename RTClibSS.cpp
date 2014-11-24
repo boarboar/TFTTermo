@@ -77,6 +77,12 @@ DateTime::DateTime (uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uin
     ss = sec;
 }
 
+void DateTime::setTime (uint8_t hour, uint8_t min, uint8_t sec) {
+    hh = hour;
+    mm = min;
+    ss = sec;
+}
+
 /*
 static uint8_t conv2d(const char* p) {
     uint8_t v = 0;
@@ -110,11 +116,12 @@ DateTime::DateTime (const char* date, const char* time) {
     ss = conv2d(time + 6);
 }
 */
-
+/*
 uint8_t DateTime::dayOfWeek() const {    
     uint16_t day = date2days(yOff, m, d);
     return (day + 6) % 7; // Jan 1, 2000 is a Saturday, i.e. returns 6
 }
+*/
 
 uint32_t DateTime::unixtime(void) const {
   uint32_t t;
@@ -124,6 +131,13 @@ uint32_t DateTime::unixtime(void) const {
 
   return t;
 }
+
+/*
+void DateTime::get(byte tmp[6]) const {
+   tmp[0]=hh; tmp[1]=mm; tmp[2]=ss;
+   tmp[3]=d; tmp[4]=m; tmp[5]=yOff;
+}
+*/
 
 ////////////////////////////////////////////////////////////////////////////////
 // RTC_DS1307 implementation
