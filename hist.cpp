@@ -2,9 +2,9 @@
 #include <Energia.h>
 #include "hist.h"
 
-unsigned long TempHistory::interval(unsigned long prev) {
-  unsigned long ms=millis();
-  if(ms>prev) return ms-prev;
+uint8_t  TempHistory::interval_m(uint8_t  prev) {
+  uint8_t ms=millis()/60000L;
+  if(ms>=prev) return ms-prev;
   return (~prev)+ms;
 }  
 
@@ -18,17 +18,17 @@ void TempHistory::init() {
   last_1h_acc_ptr=0;
   since_3h_acc=0;
   last_3h_acc_ptr=0;  
-  acc_prev_time=millis();
+  acc_prev_time_m=millis()/60000L;
 }
 
 boolean TempHistory::addAcc(int16_t temp, int16_t vcc) {
   acc.cnt++;
   acc.temp+=temp;
   acc.vcc+=vcc;
-  uint8_t mins=interval(acc_prev_time)/60000L; //time lapsed from previous storage
+  uint8_t mins=interval_m(acc_prev_time_m); //time lapsed from previous storage
   if(mins>=TH_ACC_TIME) { 
     add(1, mins, acc.temp/acc.cnt, acc.vcc/acc.cnt);
-    acc_prev_time=millis();
+    acc_prev_time_m=millis()/60000L;
     acc.temp=0;
     acc.vcc=0;
     acc.cnt=0;
@@ -101,7 +101,7 @@ int16_t TempHistory::getDiff(int16_t val, uint8_t sid) {
 
 void TempHistory::iterBegin() { 
   iter_ptr = head_ptr; 
-  iter_mbefore=interval(acc_prev_time)/60000L; // time lapsed from latest storage
+  iter_mbefore=interval_m(acc_prev_time_m); // time lapsed from latest storage
 }
 
 boolean TempHistory::movePrev() {

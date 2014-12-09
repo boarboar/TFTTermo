@@ -34,7 +34,7 @@ public:
     void add(uint8_t sid, uint8_t mins, int16_t temp, int16_t vcc);
     int16_t getDiff(int16_t val, uint8_t sid);
     uint8_t getSz() { return head_ptr + (TH_HIST_SZ-1-tail_ptr); }
-    unsigned long getLastAccTime() { return acc_prev_time; }
+    //unsigned long getLastAccTime() { return acc_prev_time; }
     wt_msg_hist *getData() { return hist; }
     uint8_t getPrev(uint8_t pos) { return pos==0?TH_HIST_SZ-1 : pos-1; }
     uint8_t getNext(uint8_t pos) { return pos==TH_HIST_SZ-1 ? 0 : pos+1; }
@@ -50,7 +50,7 @@ public:
     uint8_t _getSince3HAcc() { return since_3h_acc; }
     uint8_t _getLast3HAccPtr() { return last_3h_acc_ptr; }
     
-    static unsigned long interval(unsigned long prev);
+    static uint8_t interval_m(uint8_t prev);
 protected:
     uint16_t compress(uint8_t level);
 
@@ -62,7 +62,7 @@ protected:
     uint16_t since_3h_acc; // mins passed after last 3-hour compression
     uint8_t last_3h_acc_ptr; // ptr to the last non-accumulated 3-hour item    
     wt_msg_acc acc;
-    unsigned long acc_prev_time;
+    uint8_t acc_prev_time_m;
     uint8_t iter_ptr;
     uint16_t iter_mbefore;
 };
