@@ -201,8 +201,9 @@ void TFT::TFTinit (INT8U cs, INT8U dc, INT8U bl)
       2, 0xF2,    0x00,          /* 3Gamma Function Disable      */
       2, 0x26,    0x01,          /* Gamma curve selected         */
       16, 0xE0,   0x0F,0x2A,0x28,0x08,0x0E,0x08,0x54,0xA9,0x43,0x0A,0x0F,0x00,0x00,0x00,0x00, /* Set Gamma                    */
-      16, 0xE1,   0x00,0x15,0x17,0x07,0x11,0x06,0x2B,0x56,0x3C,0x05,0x10,0x0F,0x3F,0x3F,0x0F  /* Set Gamma                    */    
-    };
+      16, 0xE1,   0x00,0x15,0x17,0x07,0x11,0x06,0x2B,0x56,0x3C,0x05,0x10,0x0F,0x3F,0x3F,0x0F,  /* Set Gamma                    */    
+      0  
+  };
     
     WriteCmdSeq(seq);
 
@@ -322,7 +323,8 @@ INT16U TFT::drawString(const char *string,INT16 poX, INT16 poY, INT16U size,INT1
     while(*string)
     {
         drawChar(*string, poX, poY, size, fgcolor, bgcolor, opaq);
-        *string++;
+        //*string++;
+        string++;
         if(poX < getMaxX()) poX += FONT_SPACE*size;   /* Move cursor right */
         else break;
     }
@@ -336,34 +338,44 @@ void TFT::drawStraightDashedLine(INT8U dir, INT16 poX, INT16 poY, INT16U length,
     while(length--) sendData((mask>>(length&0x07))&0x01 ? color : bkcolor);
 }
 
-
+/*
 void TFT::drawLine( INT16 x0,INT16 y0,INT16 x1, INT16 y1,INT16U color)
 {    
     int x = x1-x0;
     int y = y1-y0;
     int dx = abs(x), sx = x0<x1 ? 1 : -1;
     int dy = -abs(y), sy = y0<y1 ? 1 : -1;
-    int err = dx+dy, e2;                                                /* error value e_xy             */
-    for (;;){                                                           /* loop                         */
+    int err = dx+dy, e2;                                                // error value e_xy             
+    for (;;){                                                           // loop                         
         setPixel(x0,y0,color);
         e2 = 2*err;
-        if (e2 >= dy) {                                                 /* e_xy+e_x > 0                 */
+        if (e2 >= dy) {                                                 // e_xy+e_x > 0                 
             if (x0 == x1) break;
             err += dy; x0 += sx;
         }
-        if (e2 <= dx) {                                                 /* e_xy+e_y < 0                 */
+        if (e2 <= dx) {                                                 // e_xy+e_y < 0                 
             if (y0 == y1) break;
             err += dx; y0 += sy;
         }
     }
 }
+*/
 
 void TFT::drawLineThick(INT16 x0,INT16 y0,INT16 x1,INT16 y1,INT16U color,INT8U th)
 {
+  /*
     int x = x1-x0;
     int y = y1-y0;
     int dx = abs(x), sx = x0<x1 ? 1 : -1;
     int dy = -abs(y), sy = y0<y1 ? 1 : -1;
+    */
+    
+    int16_t dx, dy;
+    int16_t sx, sy;
+    
+    if(x0<x1) {dx=x1-x0; sx=1;} else {dx=x0-x1; sx=-1; }
+    if(y0<y1) {dy=y0-y1; sy=1;} else {dy=y1-y0; sy=-1; }
+    
     int err = dx+dy, e2;                                                /* error value e_xy             */
     INT8U th2=th/2;
     for (;;){                                                           /* loop                         */

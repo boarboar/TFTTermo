@@ -134,7 +134,7 @@ public:
         INT16U drawString(const char *string,INT16 poX, INT16 poY,INT16U size,INT16U fgcolor, INT16U bgcolor=0, bool opaq=false);
 	void fillRectangle(INT16 poX, INT16 poY, INT16 length, INT16U width, INT16U color) { fillScreen(poX, poX+length, poY, poY+width, color); }
 	
-	void drawLine(INT16 x0,INT16 y0,INT16 x1,INT16 y1,INT16U color);
+	//void drawLine(INT16 x0,INT16 y0,INT16 x1,INT16 y1,INT16U color);
         void drawLineThick(INT16 x0,INT16 y0,INT16 x1,INT16 y1,INT16U color,INT8U th);
         void drawVerticalLine(INT16 poX, INT16 poY,INT16 length,INT16U color) {fillScreen(poX,poX,poY,poY+length,color);}  
         void drawHorizontalLine(INT16 poX, INT16 poY,INT16 length,INT16U color) {fillScreen(poX,poX+length,poY,poY,color);}   

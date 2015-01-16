@@ -58,8 +58,8 @@ protected:
     uint8_t head_ptr; // NEXT record to fill
     uint8_t tail_ptr; // record before oldest one 
     uint16_t since_1h_acc; // mins passed after last 1-hour compression
-    uint8_t last_1h_acc_ptr; // ptr to the last non-accumulated 1-hour item
     uint16_t since_3h_acc; // mins passed after last 3-hour compression
+    uint8_t last_1h_acc_ptr; // ptr to the last non-accumulated 1-hour item
     uint8_t last_3h_acc_ptr; // ptr to the last non-accumulated 3-hour item    
     wt_msg_acc acc;
     uint8_t acc_prev_time_m;
